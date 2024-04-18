@@ -13,6 +13,14 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+
+
+# code read: 
+# 后台核心流程的自动驱动（文件上传->文件解析分块->入库）主要就是依赖broker和executor。
+# executor的工作：不断循环扫描task表，从中拉取需要执行的任务（没被取消，progress是0）的任务然后执行
+# （分块，embedding，入库）
+
+
 import datetime
 import json
 import logging
@@ -300,6 +308,10 @@ if __name__ == "__main__":
     peewee_logger.addHandler(database_logger.handlers[0])
     peewee_logger.setLevel(database_logger.level)
 
+    # code read:
+    # 如果单机，那完全没必要用MPI，启动进程时给个序号即可（不同序号的进程处理不同的任务）
+    # 这里用MPI，想必是为了后面做多机处理的。（看下面代码也还不支持，根本没用上。后续要支持，也用不到MPI的进程间通信，
+    # 每个executor进程只需要知道自己的序号以及整体world大小即可）
     from mpi4py import MPI
 
     comm = MPI.COMM_WORLD

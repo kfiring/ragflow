@@ -13,6 +13,15 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+
+
+# code read: 
+# 后台核心流程的自动驱动（文件上传->文件解析分块->入库）主要就是依赖broker和executor。
+# broker的工作主要做两件事：
+# 1. 定时扫描document表，拉取新上传的文件，然后创建新的任务写入task表（只是把任务信息写入表，并不执行任务）
+# 2. 定时扫描task表，根据task表中的内容更新document表（解析进度，错误消息等）
+
+
 import logging
 import os
 import time
