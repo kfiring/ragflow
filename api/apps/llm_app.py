@@ -28,7 +28,7 @@ from rag.llm import EmbeddingModel, ChatModel
 def factories():
     try:
         fac = LLMFactoriesService.get_all()
-        return get_json_result(data=[f.to_dict() for f in fac if f.name not in ["QAnything", "FastEmbed"]])
+        return get_json_result(data=[f.to_dict() for f in fac if f.name not in ["Youdao", "FastEmbed"]])
     except Exception as e:
         return server_error_response(e)
 
@@ -96,16 +96,29 @@ def set_api_key():
 @validate_request("llm_factory", "llm_name", "model_type")
 def add_llm():
     req = request.json
+    factory = req["llm_factory"]
+    # For VolcEngine, due to its special authentication method
+    # Assemble volc_ak, volc_sk, endpoint_id into api_key
+    if factory == "VolcEngine":
+        temp = list(eval(req["llm_name"]).items())[0]
+        llm_name = temp[0]
+        endpoint_id = temp[1]
+        api_key = '{' + f'"volc_ak": "{req.get("volc_ak", "")}", ' \
+                        f'"volc_sk": "{req.get("volc_sk", "")}", ' \
+                        f'"ep_id": "{endpoint_id}", ' + '}'
+    else:
+        llm_name = req["llm_name"]
+        api_key = "xxxxxxxxxxxxxxx"
+
     llm = {
         "tenant_id": current_user.id,
-        "llm_factory": req["llm_factory"],
+        "llm_factory": factory,
         "model_type": req["model_type"],
-        "llm_name": req["llm_name"],
+        "llm_name": llm_name,
         "api_base": req.get("api_base", ""),
-        "api_key": "xxxxxxxxxxxxxxx"
+        "api_key": api_key
     }
 
-    factory = req["llm_factory"]
     msg = ""
     if llm["model_type"] == LLMType.EMBEDDING.value:
         mdl = EmbeddingModel[factory](
@@ -118,7 +131,10 @@ def add_llm():
             msg += f"\nFail to access embedding model({llm['llm_name']})." + str(e)
     elif llm["model_type"] == LLMType.CHAT.value:
         mdl = ChatModel[factory](
-            key=None, model_name=llm["llm_name"], base_url=llm["api_base"])
+            key=llm['api_key'] if factory == "VolcEngine" else None,
+            model_name=llm["llm_name"],
+            base_url=llm["api_base"]
+        )
         try:
             m, tc = mdl.chat(None, [{"role": "user", "content": "Hello! How are you doing!"}], {
                              "temperature": 0.9})
@@ -134,11 +150,20 @@ def add_llm():
     if msg:
         return get_data_error_result(retmsg=msg)
 
-
     if not TenantLLMService.filter_update(
             [TenantLLM.tenant_id == current_user.id, TenantLLM.llm_factory == factory, TenantLLM.llm_name == llm["llm_name"]], llm):
         TenantLLMService.save(**llm)
 
+    return get_json_result(data=True)
+
+
+@manager.route('/delete_llm', methods=['POST'])
+@login_required
+@validate_request("llm_factory", "llm_name")
+def delete_llm():
+    req = request.json
+    TenantLLMService.filter_delete(
+            [TenantLLM.tenant_id == current_user.id, TenantLLM.llm_factory == req["llm_factory"], TenantLLM.llm_name == req["llm_name"]])
     return get_json_result(data=True)
 
 
@@ -165,7 +190,7 @@ def my_llms():
 
 @manager.route('/list', methods=['GET'])
 @login_required
-def list():
+def list_app():
     model_type = request.args.get("model_type")
     try:
         objs = TenantLLMService.query(tenant_id=current_user.id)
@@ -174,7 +199,7 @@ def list():
         llms = [m.to_dict()
                 for m in llms if m.status == StatusEnum.VALID.value]
         for m in llms:
-            m["available"] = m["fid"] in facts or m["llm_name"].lower() == "flag-embedding" or m["fid"] in ["QAnything","FastEmbed"]
+            m["available"] = m["fid"] in facts or m["llm_name"].lower() == "flag-embedding" or m["fid"] in ["Youdao","FastEmbed"]
 
         llm_set = set([m["llm_name"] for m in llms])
         for o in objs:
@@ -184,7 +209,7 @@ def list():
 
         res = {}
         for m in llms:
-            if model_type and m["model_type"] != model_type:
+            if model_type and m["model_type"].find(model_type)<0:
                 continue
             if m["fid"] not in res:
                 res[m["fid"]] = []

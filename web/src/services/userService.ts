@@ -15,6 +15,9 @@ const {
   set_api_key,
   set_tenant_info,
   add_llm,
+  delete_llm,
+  getSystemStatus,
+  getSystemVersion,
 } = api;
 
 const methods = {
@@ -65,6 +68,18 @@ const methods = {
   add_llm: {
     url: add_llm,
     method: 'post',
+  },
+  delete_llm: {
+    url: delete_llm,
+    method: 'post',
+  },
+  getSystemStatus: {
+    url: getSystemStatus,
+    method: 'get',
+  },
+  getSystemVersion: {
+    url: getSystemVersion,
+    method: 'get',
   },
 } as const;
 

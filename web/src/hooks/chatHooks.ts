@@ -154,6 +154,9 @@ export const useRemoveConversation = () => {
   return removeConversation;
 };
 
+/*
+@deprecated
+ */
 export const useCompleteConversation = () => {
   const dispatch = useDispatch();
 
@@ -245,6 +248,42 @@ export const useSelectStats = () => {
   const stats: IStats = useSelector((state: any) => state.chatModel.stats);
 
   return stats;
+};
+
+//#endregion
+
+//#region shared chat
+
+export const useCreateSharedConversation = () => {
+  const dispatch = useDispatch();
+
+  const createSharedConversation = useCallback(
+    (userId?: string) => {
+      return dispatch<any>({
+        type: 'chatModel/createExternalConversation',
+        payload: { userId },
+      });
+    },
+    [dispatch],
+  );
+
+  return createSharedConversation;
+};
+
+export const useFetchSharedConversation = () => {
+  const dispatch = useDispatch();
+
+  const fetchSharedConversation = useCallback(
+    (conversationId: string) => {
+      return dispatch<any>({
+        type: 'chatModel/getExternalConversation',
+        payload: conversationId,
+      });
+    },
+    [dispatch],
+  );
+
+  return fetchSharedConversation;
 };
 
 //#endregion

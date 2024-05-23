@@ -15,7 +15,7 @@ es_logger.info("Elasticsearch version: "+str(elasticsearch.__version__))
 
 
 @singleton
-class HuEs:
+class ESConnection:
     def __init__(self):
         self.info = {}
         self.conn()
@@ -42,6 +42,9 @@ class HuEs:
         v = self.info.get("version", {"number": "5.6"})
         v = v["number"].split(".")[0]
         return int(v) >= 7
+
+    def health(self):
+        return dict(self.es.cluster.health())
 
     def upsert(self, df, idxnm=""):
         res = []
@@ -454,4 +457,4 @@ class HuEs:
             scroll_size = len(page['hits']['hits'])
 
 
-ELASTICSEARCH = HuEs()
+ELASTICSEARCH = ESConnection()

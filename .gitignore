@@ -21,6 +21,10 @@ Cargo.lock
 
 .idea/
 .vscode/
+
+.DS_Store
+
 ragflow-logs/
 logs
 rag/res
+

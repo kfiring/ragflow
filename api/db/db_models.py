@@ -21,14 +21,13 @@ import operator
 from functools import wraps
 from itsdangerous.url_safe import URLSafeTimedSerializer as Serializer
 from flask_login import UserMixin
-
+from playhouse.migrate import MySQLMigrator, migrate
 from peewee import (
-    BigAutoField, BigIntegerField, BooleanField, CharField,
-    CompositeKey, Insert, IntegerField, TextField, FloatField, DateTimeField,
+    BigIntegerField, BooleanField, CharField,
+    CompositeKey, IntegerField, TextField, FloatField, DateTimeField,
     Field, Model, Metadata
 )
 from playhouse.pool import PooledMySQLDatabase
-
 from api.db import SerializedType, ParserType
 from api.settings import DATABASE, stat_logger, SECRET_KEY
 from api.utils.log_utils import getLogger
@@ -344,7 +343,7 @@ class DataBaseModel(BaseModel):
 
 
 @DB.connection_context()
-def init_database_tables():
+def init_database_tables(alter_fields=[]):
     members = inspect.getmembers(sys.modules[__name__], inspect.isclass)
     table_objs = []
     create_failed_list = []
@@ -361,6 +360,7 @@ def init_database_tables():
     if create_failed_list:
         LOGGER.info(f"create tables failed: {create_failed_list}")
         raise Exception(f"create tables failed: {create_failed_list}")
+    migrate_db()
 
 
 def fill_db_model_object(model_object, human_model_dict):
@@ -386,7 +386,7 @@ class User(DataBaseModel, UserMixin):
         max_length=32,
         null=True,
         help_text="English|Chinese",
-        default="English")
+        default="Chinese" if "zh_CN" in os.getenv("LANG", "") else "English")
     color_schema = CharField(
         max_length=32,
         null=True,
@@ -578,7 +578,7 @@ class Knowledgebase(DataBaseModel):
     language = CharField(
         max_length=32,
         null=True,
-        default="English",
+        default="Chinese" if "zh_CN" in os.getenv("LANG", "") else "English",
         help_text="English|Chinese")
     description = TextField(null=True, help_text="KB description")
     embd_id = CharField(
@@ -669,6 +669,66 @@ class Document(DataBaseModel):
         db_table = "document"
 
 
+class File(DataBaseModel):
+    id = CharField(
+        max_length=32,
+        primary_key=True,
+    )
+    parent_id = CharField(
+        max_length=32,
+        null=False,
+        help_text="parent folder id",
+        index=True)
+    tenant_id = CharField(
+        max_length=32,
+        null=False,
+        help_text="tenant id",
+        index=True)
+    created_by = CharField(
+        max_length=32,
+        null=False,
+        help_text="who created it")
+    name = CharField(
+        max_length=255,
+        null=False,
+        help_text="file name or folder name",
+        index=True)
+    location = CharField(
+        max_length=255,
+        null=True,
+        help_text="where dose it store")
+    size = IntegerField(default=0)
+    type = CharField(max_length=32, null=False, help_text="file extension")
+    source_type = CharField(
+        max_length=128,
+        null=False,
+        default="",
+        help_text="where dose this document come from")
+
+    class Meta:
+        db_table = "file"
+
+
+class File2Document(DataBaseModel):
+    id = CharField(
+        max_length=32,
+        primary_key=True,
+    )
+    file_id = CharField(
+        max_length=32,
+        null=True,
+        help_text="file id",
+        index=True)
+    document_id = CharField(
+        max_length=32,
+        null=True,
+        help_text="document id",
+        index=True)
+
+    class Meta:
+        db_table = "file2document"
+
+
 class Task(DataBaseModel):
     id = CharField(max_length=32, primary_key=True)
     doc_id = CharField(max_length=32, null=False, index=True)
@@ -695,11 +755,11 @@ class Dialog(DataBaseModel):
     language = CharField(
         max_length=32,
         null=True,
-        default="Chinese",
+        default="Chinese" if "zh_CN" in os.getenv("LANG", "") else "English",
         help_text="English|Chinese")
-    llm_id = CharField(max_length=32, null=False, help_text="default llm ID")
+    llm_id = CharField(max_length=128, null=False, help_text="default llm ID")
     llm_setting = JSONField(null=False, default={"temperature": 0.1, "top_p": 0.3, "frequency_penalty": 0.7,
-                                                 "presence_penalty": 0.4, "max_tokens": 215})
+                                                 "presence_penalty": 0.4, "max_tokens": 512})
     prompt_type = CharField(
         max_length=16,
         null=False,
@@ -762,3 +822,14 @@ class API4Conversation(DataBaseModel):
 
     class Meta:
         db_table = "api_4_conversation"
+
+
+def migrate_db():
+    try:
+        with DB.transaction():
+            migrator = MySQLMigrator(DB)
+            migrate(
+                migrator.add_column('file', 'source_type', CharField(max_length=128, null=False, default="", help_text="where dose this document come from"))
+            )
+    except Exception as e:
+        pass

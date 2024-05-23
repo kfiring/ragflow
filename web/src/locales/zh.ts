@@ -22,6 +22,10 @@ export default {
       languagePlaceholder: '请选择语言',
       copy: '复制',
       copied: '复制成功',
+      comingSoon: '即将推出',
+      download: '下载',
+      close: '关闭',
+      preview: '预览',
     },
     login: {
       login: '登录',
@@ -52,6 +56,7 @@ export default {
       home: '首页',
       setting: '用户设置',
       logout: '登出',
+      fileManager: '文件管理',
     },
     knowledgeList: {
       welcome: '欢迎回来',
@@ -60,6 +65,7 @@ export default {
       name: '名称',
       namePlaceholder: '请输入名称',
       doc: '文档',
+      searchKnowledgePlaceholder: '搜索',
     },
     knowledgeDetails: {
       dataset: '数据集',
@@ -69,7 +75,7 @@ export default {
       name: '名称',
       namePlaceholder: '请输入名称',
       doc: '文档',
-      datasetDescription: '嘿，添加数据集后别忘了调整解析块！ 😉',
+      datasetDescription: '😉 解析成功后才能问答哦。',
       addFile: '新增文件',
       searchFiles: '搜索文件',
       localFiles: '本地文件',
@@ -225,7 +231,7 @@ export default {
       <ul>
     <li>对于 csv 或 txt 文件，列之间的分隔符为 <em><b>TAB</b></em>。</li>
     <li>第一行必须是列标题。</li>
-    <li>列标题必须是有意义的术语，以便我们的法学硕士能够理解。
+    <li>列标题必须是有意义的术语，以便我们的大语言模型能够理解。
     列举一些同义词时最好使用斜杠<i>'/'</i>来分隔，甚至更好
     使用方括号枚举值，例如 <i>'gender/sex(male,female)'</i>.<p>
     以下是标题的一些示例：<ol>
@@ -249,6 +255,25 @@ export default {
       </p><p>
       如果你要总结的东西需要一篇文章的全部上下文，并且所选LLM的上下文长度覆盖了文档长度，你可以尝试这种方法。
       </p>`,
+      useRaptor: '使用召回增强RAPTOR策略',
+      useRaptorTip: '请参考 https://huggingface.co/papers/2401.18059',
+      prompt: '提示词',
+      promptMessage: '提示词是必填项',
+      promptText: `请总结以下段落。 小心数字，不要编造。 段落如下：
+      {cluster_content}
+以上就是你需要总结的内容。`,
+      maxToken: '最大token数',
+      maxTokenMessage: '最大token数是必填项',
+      threshold: '阈值',
+      thresholdMessage: '阈值是必填项',
+      maxCluster: '最大聚类数',
+      maxClusterMessage: '最大聚类数是必填项',
+      randomSeed: '随机种子',
+      randomSeedMessage: '随机种子是必填项',
+      promptTip: 'LLM提示用于总结。',
+      maxTokenTip: '用于汇总的最大token数。',
+      thresholdTip: '阈值越大，聚类越少。',
+      maxClusterTip: '最大聚类数。',
     },
     chunk: {
       chunk: '解析块',
@@ -264,6 +289,8 @@ export default {
       keyword: '关键词',
       function: '函数',
       chunkMessage: '请输入值！',
+      full: '全文',
+      ellipse: '省略',
     },
     chat: {
       createAssistant: '新建助理',
@@ -298,7 +325,7 @@ export default {
       systemTip:
         '当LLM回答问题时，你需要LLM遵循的说明，比如角色设计、答案长度和答案语言等。',
       topN: 'Top N',
-      topNTip: `并非所有相似度得分高于“相似度阈值”的块都会被提供给法学硕士。 LLM 只能看到这些“Top N”块。`,
+      topNTip: `并非所有相似度得分高于“相似度阈值”的块都会被提供给大语言模型。 LLM 只能看到这些“Top N”块。`,
       variable: '变量',
       variableTip: `如果您使用对话 API，变量可能会帮助您使用不同的策略与客户聊天。
       这些变量用于填写提示中的“系统”部分，以便给LLM一个提示。
@@ -315,7 +342,7 @@ export default {
       improvise: '即兴创作',
       precise: '精确',
       balance: '平衡',
-      freedomTip: `“精确”意味着法学硕士会保守并谨慎地回答你的问题。 “即兴发挥”意味着你希望法学硕士能够自由地畅所欲言。 “平衡”是谨慎与自由之间的平衡。`,
+      freedomTip: `“精确”意味着大语言模型会保守并谨慎地回答你的问题。 “即兴发挥”意味着你希望大语言模型能够自由地畅所欲言。 “平衡”是谨慎与自由之间的平衡。`,
       temperature: '温度',
       temperatureMessage: '温度是必填项',
       temperatureTip:
@@ -338,24 +365,31 @@ export default {
         '这设置了模型输出的最大长度，以标记（单词或单词片段）的数量来衡量。',
       quote: '显示引文',
       quoteTip: '是否应该显示原文出处？',
-      overview: '概览',
+      overview: '聊天 API',
       pv: '消息数',
       uv: '活跃用户数',
       speed: 'Token 输出速度',
       tokens: '消耗Token数',
       round: '会话互动数',
       thumbUp: '用户满意度',
-      publicUrl: '公共Url',
       preview: '预览',
       embedded: '嵌入',
       serviceApiEndpoint: '服务API端点',
-      apiKey: 'API键',
-      apiReference: 'API参考',
+      apiKey: 'API 键',
+      apiReference: 'API 文档',
       dateRange: '日期范围：',
-      backendServiceApi: '后端服务API',
+      backendServiceApi: '后端服务 API',
       createNewKey: '创建新密钥',
       created: '创建于',
       action: '操作',
+      embedModalTitle: '嵌入网站',
+      comingSoon: '即将推出',
+      fullScreenTitle: '全屏嵌入',
+      fullScreenDescription: '将以下iframe嵌入您的网站处于所需位置',
+      partialTitle: '部分嵌入',
+      extensionTitle: 'Chrome 插件',
+      tokenError: '请先创建 Api Token!',
+      searching: '搜索中',
     },
     setting: {
       profile: '概要',
@@ -363,8 +397,9 @@ export default {
       password: '密码',
       passwordDescription: '请输入您当前的密码以更改您的密码。',
       model: '模型提供商',
-      modelDescription: '在此管理您的帐户设置和首选项。',
+      modelDescription: '在此设置模型参数和 API Key。',
       team: '团队',
+      system: '系统',
       logout: '登出',
       username: '用户名',
       usernameMessage: '请输入用户名',
@@ -423,6 +458,11 @@ export default {
       modelTypeMessage: '请输入模型类型！',
       baseUrlNameMessage: '请输入基础 Url！',
       ollamaLink: '如何集成 {{name}}',
+      volcModelNameMessage: '请输入模型名称！格式：{"模型名称":"EndpointID"}',
+      addVolcEngineAK: '火山 ACCESS_KEY',
+      volcAKMessage: '请输入VOLC_ACCESS_KEY',
+      addVolcEngineSK: '火山 SECRET_KEY',
+      volcSKMessage: '请输入VOLC_SECRET_KEY',
     },
     message: {
       registered: '注册成功',
@@ -435,6 +475,7 @@ export default {
       renamed: '重命名成功',
       operated: '操作成功',
       updated: '更新成功',
+      uploaded: '上传成功',
       200: '服务器成功返回请求的数据。',
       201: '新建或修改数据成功。',
       202: '一个请求已经进入后台排队（异步任务）。',
@@ -454,6 +495,26 @@ export default {
       networkAnomalyDescription: '您的网络发生异常，无法连接服务器',
       networkAnomaly: '网络异常',
       hint: '提示',
+    },
+    fileManager: {
+      name: '名称',
+      uploadDate: '上传日期',
+      knowledgeBase: '知识库',
+      size: '大小',
+      action: '操作',
+      addToKnowledge: '链接知识库',
+      pleaseSelect: '请选择',
+      newFolder: '新建文件夹',
+      uploadFile: '上传文件',
+      uploadTitle: '点击或拖拽文件至此区域即可上传',
+      uploadDescription:
+        '支持单次或批量上传。 严禁上传公司数据或其他违禁文件。',
+      file: '文件',
+      directory: '文件夹',
+      local: '本地上传',
+      s3: 'S3 上传',
+      preview: '预览',
+      fileError: '文件错误',
     },
     footer: {
       profile: 'All rights reserved @ React',

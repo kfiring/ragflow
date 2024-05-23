@@ -13,7 +13,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+import json
 import re
+from datetime import datetime
 
 from flask import request, session, redirect
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -22,11 +24,12 @@ from flask_login import login_required, current_user, login_user, logout_user
 from api.db.db_models import TenantLLM
 from api.db.services.llm_service import TenantLLMService, LLMService
 from api.utils.api_utils import server_error_response, validate_request
-from api.utils import get_uuid, get_format_time, decrypt, download_img
-from api.db import UserTenantRole, LLMType
-from api.settings import RetCode, GITHUB_OAUTH, CHAT_MDL, EMBEDDING_MDL, ASR_MDL, IMAGE2TEXT_MDL, PARSERS, API_KEY, \
+from api.utils import get_uuid, get_format_time, decrypt, download_img, current_timestamp, datetime_format
+from api.db import UserTenantRole, LLMType, FileType
+from api.settings import RetCode, GITHUB_OAUTH, FEISHU_OAUTH, CHAT_MDL, EMBEDDING_MDL, ASR_MDL, IMAGE2TEXT_MDL, PARSERS, API_KEY, \
     LLM_FACTORY, LLM_BASE_URL
 from api.db.services.user_service import UserService, TenantService, UserTenantService
+from api.db.services.file_service import FileService
 from api.settings import stat_logger
 from api.utils.api_utils import get_json_result, cors_reponse
 
@@ -56,6 +59,8 @@ def login():
         response_data = user.to_json()
         user.access_token = get_uuid()
         login_user(user)
+        user.update_time = current_timestamp(),
+        user.update_date = datetime_format(datetime.now()),
         user.save()
         msg = "Welcome back!"
         return cors_reponse(data=response_data, auth=user.get_id(), retmsg=msg)
@@ -116,6 +121,79 @@ def github_callback():
     login_user(user)
     user.save()
     return redirect("/?auth=%s" % user.get_id())
+
+
+@manager.route('/feishu_callback', methods=['GET'])
+def feishu_callback():
+    import requests
+    app_access_token_res = requests.post(FEISHU_OAUTH.get("app_access_token_url"), data=json.dumps({
+        "app_id": FEISHU_OAUTH.get("app_id"),
+        "app_secret": FEISHU_OAUTH.get("app_secret")
+    }), headers={"Content-Type": "application/json; charset=utf-8"})
+    app_access_token_res = app_access_token_res.json()
+    if app_access_token_res['code'] != 0:
+        return redirect("/?error=%s" % app_access_token_res)
+
+    res = requests.post(FEISHU_OAUTH.get("user_access_token_url"), data=json.dumps({
+        "grant_type": FEISHU_OAUTH.get("grant_type"),
+        "code": request.args.get('code')
+    }), headers={"Content-Type": "application/json; charset=utf-8",
+                 'Authorization': f"Bearer {app_access_token_res['app_access_token']}"})
+    res = res.json()
+    if res['code'] != 0:
+        return redirect("/?error=%s" % res["message"])
+
+    if "contact:user.email:readonly" not in res["data"]["scope"].split(" "):
+        return redirect("/?error=contact:user.email:readonly not in scope")
+    session["access_token"] = res["data"]["access_token"]
+    session["access_token_from"] = "feishu"
+    userinfo = user_info_from_feishu(session["access_token"])
+    users = UserService.query(email=userinfo["email"])
+    user_id = get_uuid()
+    if not users:
+        try:
+            try:
+                avatar = download_img(userinfo["avatar_url"])
+            except Exception as e:
+                stat_logger.exception(e)
+                avatar = ""
+            users = user_register(user_id, {
+                "access_token": session["access_token"],
+                "email": userinfo["email"],
+                "avatar": avatar,
+                "nickname": userinfo["en_name"],
+                "login_channel": "feishu",
+                "last_login_time": get_format_time(),
+                "is_superuser": False,
+            })
+            if not users:
+                raise Exception('Register user failure.')
+            if len(users) > 1:
+                raise Exception('Same E-mail exist!')
+            user = users[0]
+            login_user(user)
+            return redirect("/?auth=%s" % user.get_id())
+        except Exception as e:
+            rollback_user_registration(user_id)
+            stat_logger.exception(e)
+            return redirect("/?error=%s" % str(e))
+    user = users[0]
+    user.access_token = get_uuid()
+    login_user(user)
+    user.save()
+    return redirect("/?auth=%s" % user.get_id())
+
+
+def user_info_from_feishu(access_token):
+    import requests
+    headers = {"Content-Type": "application/json; charset=utf-8",
+               'Authorization': f"Bearer {access_token}"}
+    res = requests.get(
+        f"https://open.feishu.cn/open-apis/authen/v1/user_info",
+        headers=headers)
+    user_info = res.json()["data"]
+    user_info["email"] = None if user_info.get("email") == "" else user_info["email"]
+    return user_info
 
 
 def user_info_from_github(access_token):
@@ -196,7 +274,7 @@ def rollback_user_registration(user_id):
     except Exception as e:
         pass
     try:
-        TenantLLM.delete().where(TenantLLM.tenant_id == user_id).excute()
+        TenantLLM.delete().where(TenantLLM.tenant_id == user_id).execute()
     except Exception as e:
         pass
 
@@ -218,6 +296,17 @@ def user_register(user_id, user):
         "invited_by": user_id,
         "role": UserTenantRole.OWNER
     }
+    file_id = get_uuid()
+    file = {
+        "id": file_id,
+        "parent_id": file_id,
+        "tenant_id": user_id,
+        "created_by": user_id,
+        "name": "/",
+        "type": FileType.FOLDER.value,
+        "size": 0,
+        "location": "",
+    }
     tenant_llm = []
     for llm in LLMService.query(fid=LLM_FACTORY):
         tenant_llm.append({"tenant_id": user_id,
@@ -233,6 +322,7 @@ def user_register(user_id, user):
     TenantService.insert(**tenant)
     UserTenantService.insert(**usr_tenant)
     TenantLLMService.insert_many(tenant_llm)
+    FileService.insert(file)
     return UserService.query(email=user["email"])
 
 

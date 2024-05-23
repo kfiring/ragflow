@@ -7,14 +7,13 @@ import logging
 import copy
 from elasticsearch_dsl import Q
 
-from rag.nlp import huqie, term_weight, synonym
-
+from rag.nlp import rag_tokenizer, term_weight, synonym
 
 class EsQueryer:
     def __init__(self, es):
         self.tw = term_weight.Dealer()
         self.es = es
-        self.syn = synonym.Dealer(None)
+        self.syn = synonym.Dealer()
         self.flds = ["ask_tks^10", "ask_small_tks"]
 
     @staticmethod
@@ -37,7 +36,7 @@ class EsQueryer:
         patts = [
             (r"是*(什么样的|哪家|一下|那家|啥样|咋样了|什么时候|何时|何地|何人|是否|是不是|多少|哪里|怎么|哪儿|怎么样|如何|哪些|是啥|啥是|啊|吗|呢|吧|咋|什么|有没有|呀)是*", ""),
             (r"(^| )(what|who|how|which|where|why)('re|'s)? ", " "),
-            (r"(^| )('s|'re|is|are|were|was|do|does|did|don't|doesn't|didn't|has|have|be|there|you|me|your|my|mine|just|please|may|i|should|would|wouldn't|will|won't|done|go|for|with|so|the|a|an|by|i'm|it's|he's|she's|they|they're|you're|as|by|on|in|at|up|out|down)", " ")
+            (r"(^| )('s|'re|is|are|were|was|do|does|did|don't|doesn't|didn't|has|have|be|there|you|me|your|my|mine|just|please|may|i|should|would|wouldn't|will|won't|done|go|for|with|so|the|a|an|by|i'm|it's|he's|she's|they|they're|you're|as|by|on|in|at|up|out|down) ", " ")
         ]
         for r, p in patts:
             txt = re.sub(r, p, txt, flags=re.IGNORECASE)
@@ -45,18 +44,19 @@ class EsQueryer:
 
     def question(self, txt, tbl="qa", min_match="60%"):
         txt = re.sub(
-            r"[ \r\n\t,，。？?/`!！&]+",
+            r"[ \r\n\t,，。？?/`!！&\^%%]+",
             " ",
-            huqie.tradi2simp(
-                huqie.strQ2B(
+            rag_tokenizer.tradi2simp(
+                rag_tokenizer.strQ2B(
                     txt.lower()))).strip()
         txt = EsQueryer.rmWWW(txt)
 
         if not self.isChinese(txt):
-            tks = huqie.qie(txt).split(" ")
-            q = copy.deepcopy(tks)
-            for i in range(1, len(tks)):
-                q.append("\"%s %s\"^2" % (tks[i - 1], tks[i]))
+            tks = rag_tokenizer.tokenize(txt).split(" ")
+            tks_w = self.tw.weights(tks)
+            q = [re.sub(r"[ \\\"']+", "", tk)+"^{:.4f}".format(w) for tk, w in tks_w]
+            for i in range(1, len(tks_w)):
+                q.append("\"%s %s\"^%.4f" % (tks_w[i - 1][0], tks_w[i][0], max(tks_w[i - 1][1], tks_w[i][1])*2))
             if not q:
                 q.append(txt)
             return Q("bool",
@@ -65,7 +65,7 @@ class EsQueryer:
                             boost=1)#, minimum_should_match=min_match)
                      ), tks
 
-        def needQieqie(tk):
+        def need_fine_grained_tokenize(tk):
             if len(tk) < 4:
                 return False
             if re.match(r"[0-9a-z\.\+#_\*-]+$", tk):
@@ -81,7 +81,7 @@ class EsQueryer:
             logging.info(json.dumps(twts, ensure_ascii=False))
             tms = []
             for tk, w in sorted(twts, key=lambda x: x[1] * -1):
-                sm = huqie.qieqie(tk).split(" ") if needQieqie(tk) else []
+                sm = rag_tokenizer.fine_grained_tokenize(tk).split(" ") if need_fine_grained_tokenize(tk) else []
                 sm = [
                     re.sub(
                         r"[ ,\./;'\[\]\\`~!@#$%\^&\*\(\)=\+_<>\?:\"\{\}\|，。；‘’【】、！￥……（）——《》？：“”-]+",
@@ -110,10 +110,10 @@ class EsQueryer:
             if len(twts) > 1:
                 tms += f" (\"%s\"~4)^1.5" % (" ".join([t for t, _ in twts]))
             if re.match(r"[0-9a-z ]+$", tt):
-                tms = f"(\"{tt}\" OR \"%s\")" % huqie.qie(tt)
+                tms = f"(\"{tt}\" OR \"%s\")" % rag_tokenizer.tokenize(tt)
 
             syns = " OR ".join(
-                ["\"%s\"^0.7" % EsQueryer.subSpecialChar(huqie.qie(s)) for s in syns])
+                ["\"%s\"^0.7" % EsQueryer.subSpecialChar(rag_tokenizer.tokenize(s)) for s in syns])
             if syns:
                 tms = f"({tms})^5 OR ({syns})^0.7"
 

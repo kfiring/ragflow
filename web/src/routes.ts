@@ -5,6 +5,11 @@ const routes = [
     layout: false,
   },
   {
+    path: '/chat/share',
+    component: '@/pages/chat/share',
+    layout: false,
+  },
+  {
     path: '/',
     component: '@/layouts',
     layout: false,
@@ -73,13 +78,26 @@ const routes = [
             path: '/user-setting/team',
             component: '@/pages/user-setting/setting-team',
           },
+          {
+            path: '/user-setting/system',
+            component: '@/pages/user-setting/setting-system',
+          },
         ],
       },
       {
         path: '/file',
-        component: '@/pages/file',
+        component: '@/pages/file-manager',
+      },
+      {
+        path: '/flow',
+        component: '@/pages/flow',
       },
     ],
+  },
+  {
+    path: 'document/:id',
+    component: '@/pages/document-viewer',
+    layout: false,
   },
   {
     path: '/*',

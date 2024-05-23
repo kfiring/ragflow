@@ -13,17 +13,31 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
+import json
+import os
+import re
 from datetime import datetime, timedelta
-from flask import request
+from flask import request, Response
 from flask_login import login_required, current_user
-from api.db.db_models import APIToken, API4Conversation
+
+from api.db import FileType, ParserType, FileSource
+from api.db.db_models import APIToken, API4Conversation, Task, File
+from api.db.services import duplicate_name
 from api.db.services.api_service import APITokenService, API4ConversationService
 from api.db.services.dialog_service import DialogService, chat
+from api.db.services.document_service import DocumentService
+from api.db.services.file2document_service import File2DocumentService
+from api.db.services.file_service import FileService
+from api.db.services.knowledgebase_service import KnowledgebaseService
+from api.db.services.task_service import queue_tasks, TaskService
 from api.db.services.user_service import UserTenantService
-from api.settings import RetCode
+from api.settings import RetCode, retrievaler
 from api.utils import get_uuid, current_timestamp, datetime_format
 from api.utils.api_utils import server_error_response, get_data_error_result, get_json_result, validate_request
 from itsdangerous import URLSafeTimedSerializer
+
+from api.utils.file_utils import filename_type, thumbnail
+from rag.utils.minio_conn import MINIO
 
 
 def generate_confirmation_token(tenent_id):
@@ -105,7 +119,7 @@ def stats():
         res = {
             "pv": [(o["dt"], o["pv"]) for o in objs],
             "uv": [(o["dt"], o["uv"]) for o in objs],
-            "speed": [(o["dt"], float(o["tokens"])/float(o["duration"])) for o in objs],
+            "speed": [(o["dt"], float(o["tokens"])/(float(o["duration"]+0.1))) for o in objs],
             "tokens": [(o["dt"], float(o["tokens"])/1000.) for o in objs],
             "round": [(o["dt"], o["round"]) for o in objs],
             "thumb_up": [(o["dt"], o["thumb_up"]) for o in objs]
@@ -154,6 +168,7 @@ def completion():
     e, conv = API4ConversationService.get_by_id(req["conversation_id"])
     if not e:
         return get_data_error_result(retmsg="Conversation not found!")
+    if "quote" not in req: req["quote"] = False
 
     msg = []
     for m in req["messages"]:
@@ -170,14 +185,48 @@ def completion():
             return get_data_error_result(retmsg="Dialog not found!")
         del req["conversation_id"]
         del req["messages"]
-        ans = chat(dia, msg, **req)
+
         if not conv.reference:
             conv.reference = []
-        conv.reference.append(ans["reference"])
-        conv.message.append({"role": "assistant", "content": ans["answer"]})
-        API4ConversationService.append_message(conv.id, conv.to_dict())
-        APITokenService.APITokenService(token)
-        return get_json_result(data=ans)
+        conv.message.append({"role": "assistant", "content": ""})
+        conv.reference.append({"chunks": [], "doc_aggs": []})
+
+        def fillin_conv(ans):
+            nonlocal conv
+            if not conv.reference:
+                conv.reference.append(ans["reference"])
+            else: conv.reference[-1] = ans["reference"]
+            conv.message[-1] = {"role": "assistant", "content": ans["answer"]}
+
+        def stream():
+            nonlocal dia, msg, req, conv
+            try:
+                for ans in chat(dia, msg, True, **req):
+                    fillin_conv(ans)
+                    yield "data:"+json.dumps({"retcode": 0, "retmsg": "", "data": ans}, ensure_ascii=False) + "\n\n"
+                API4ConversationService.append_message(conv.id, conv.to_dict())
+            except Exception as e:
+                yield "data:" + json.dumps({"retcode": 500, "retmsg": str(e),
+                                            "data": {"answer": "**ERROR**: "+str(e), "reference": []}},
+                                           ensure_ascii=False) + "\n\n"
+            yield "data:"+json.dumps({"retcode": 0, "retmsg": "", "data": True}, ensure_ascii=False) + "\n\n"
+
+        if req.get("stream", True):
+            resp = Response(stream(), mimetype="text/event-stream")
+            resp.headers.add_header("Cache-control", "no-cache")
+            resp.headers.add_header("Connection", "keep-alive")
+            resp.headers.add_header("X-Accel-Buffering", "no")
+            resp.headers.add_header("Content-Type", "text/event-stream; charset=utf-8")
+            return resp
+        else:
+            answer = None
+            for ans in chat(dia, msg, **req):
+                answer = ans
+                fillin_conv(ans)
+                API4ConversationService.append_message(conv.id, conv.to_dict())
+                break
+            return get_json_result(data=answer)
+
     except Exception as e:
         return server_error_response(e)
 
@@ -193,3 +242,249 @@ def get(conversation_id):
         return get_json_result(data=conv.to_dict())
     except Exception as e:
         return server_error_response(e)
+
+
+@manager.route('/document/upload', methods=['POST'])
+@validate_request("kb_name")
+def upload():
+    token = request.headers.get('Authorization').split()[1]
+    objs = APIToken.query(token=token)
+    if not objs:
+        return get_json_result(
+            data=False, retmsg='Token is not valid!"', retcode=RetCode.AUTHENTICATION_ERROR)
+
+    kb_name = request.form.get("kb_name").strip()
+    tenant_id = objs[0].tenant_id
+
+    try:
+        e, kb = KnowledgebaseService.get_by_name(kb_name, tenant_id)
+        if not e:
+            return get_data_error_result(
+                retmsg="Can't find this knowledgebase!")
+        kb_id = kb.id
+    except Exception as e:
+        return server_error_response(e)
+
+    if 'file' not in request.files:
+        return get_json_result(
+            data=False, retmsg='No file part!', retcode=RetCode.ARGUMENT_ERROR)
+
+    file = request.files['file']
+    if file.filename == '':
+        return get_json_result(
+            data=False, retmsg='No file selected!', retcode=RetCode.ARGUMENT_ERROR)
+
+    root_folder = FileService.get_root_folder(tenant_id)
+    pf_id = root_folder["id"]
+    FileService.init_knowledgebase_docs(pf_id, tenant_id)
+    kb_root_folder = FileService.get_kb_folder(tenant_id)
+    kb_folder = FileService.new_a_file_from_kb(kb.tenant_id, kb.name, kb_root_folder["id"])
+
+    try:
+        if DocumentService.get_doc_count(kb.tenant_id) >= int(os.environ.get('MAX_FILE_NUM_PER_USER', 8192)):
+            return get_data_error_result(
+                retmsg="Exceed the maximum file number of a free user!")
+
+        filename = duplicate_name(
+            DocumentService.query,
+            name=file.filename,
+            kb_id=kb_id)
+        filetype = filename_type(filename)
+        if not filetype:
+            return get_data_error_result(
+                retmsg="This type of file has not been supported yet!")
+
+        location = filename
+        while MINIO.obj_exist(kb_id, location):
+            location += "_"
+        blob = request.files['file'].read()
+        MINIO.put(kb_id, location, blob)
+        doc = {
+            "id": get_uuid(),
+            "kb_id": kb.id,
+            "parser_id": kb.parser_id,
+            "parser_config": kb.parser_config,
+            "created_by": kb.tenant_id,
+            "type": filetype,
+            "name": filename,
+            "location": location,
+            "size": len(blob),
+            "thumbnail": thumbnail(filename, blob)
+        }
+
+        form_data=request.form
+        if "parser_id" in form_data.keys():
+            if request.form.get("parser_id").strip() in list(vars(ParserType).values())[1:-3]:
+                doc["parser_id"] = request.form.get("parser_id").strip()
+        if doc["type"] == FileType.VISUAL:
+            doc["parser_id"] = ParserType.PICTURE.value
+        if re.search(r"\.(ppt|pptx|pages)$", filename):
+            doc["parser_id"] = ParserType.PRESENTATION.value
+
+        doc_result = DocumentService.insert(doc)
+        FileService.add_file_from_kb(doc, kb_folder["id"], kb.tenant_id)
+    except Exception as e:
+        return server_error_response(e)
+
+    if "run" in form_data.keys():
+        if request.form.get("run").strip() == "1":
+            try:
+                info = {"run": 1, "progress": 0}
+                info["progress_msg"] = ""
+                info["chunk_num"] = 0
+                info["token_num"] = 0
+                DocumentService.update_by_id(doc["id"], info)
+                # if str(req["run"]) == TaskStatus.CANCEL.value:
+                tenant_id = DocumentService.get_tenant_id(doc["id"])
+                if not tenant_id:
+                    return get_data_error_result(retmsg="Tenant not found!")
+
+                #e, doc = DocumentService.get_by_id(doc["id"])
+                TaskService.filter_delete([Task.doc_id == doc["id"]])
+                e, doc = DocumentService.get_by_id(doc["id"])
+                doc = doc.to_dict()
+                doc["tenant_id"] = tenant_id
+                bucket, name = File2DocumentService.get_minio_address(doc_id=doc["id"])
+                queue_tasks(doc, bucket, name)
+            except Exception as e:
+                 return server_error_response(e)
+
+    return get_json_result(data=doc_result.to_json())
+
+
+@manager.route('/list_chunks', methods=['POST'])
+# @login_required
+def list_chunks():
+    token = request.headers.get('Authorization').split()[1]
+    objs = APIToken.query(token=token)
+    if not objs:
+        return get_json_result(
+            data=False, retmsg='Token is not valid!"', retcode=RetCode.AUTHENTICATION_ERROR)
+
+    form_data = request.form
+
+    try:
+        if "doc_name" in form_data.keys():
+            tenant_id = DocumentService.get_tenant_id_by_name(form_data['doc_name'])
+            doc_id = DocumentService.get_doc_id_by_doc_name(form_data['doc_name'])
+
+        elif "doc_id" in form_data.keys():
+            tenant_id = DocumentService.get_tenant_id(form_data['doc_id'])
+            doc_id = form_data['doc_id']
+        else:
+            return get_json_result(
+                data=False,retmsg="Can't find doc_name or doc_id"
+            )
+
+        res = retrievaler.chunk_list(doc_id=doc_id, tenant_id=tenant_id)
+        res = [
+            {
+                "content": res_item["content_with_weight"],
+                "doc_name": res_item["docnm_kwd"],
+                "img_id": res_item["img_id"]
+            } for res_item in res
+        ]
+
+    except Exception as e:
+        return server_error_response(e)
+
+    return get_json_result(data=res)
+
+
+@manager.route('/list_kb_docs', methods=['POST'])
+# @login_required
+def list_kb_docs():
+    token = request.headers.get('Authorization').split()[1]
+    objs = APIToken.query(token=token)
+    if not objs:
+        return get_json_result(
+            data=False, retmsg='Token is not valid!"', retcode=RetCode.AUTHENTICATION_ERROR)
+
+    tenant_id = objs[0].tenant_id
+    kb_name = request.form.get("kb_name").strip()
+
+    try:
+        e, kb = KnowledgebaseService.get_by_name(kb_name, tenant_id)
+        if not e:
+            return get_data_error_result(
+                retmsg="Can't find this knowledgebase!")
+        kb_id = kb.id
+
+    except Exception as e:
+        return server_error_response(e)
+
+    page_number = int(request.form.get("page", 1))
+    items_per_page = int(request.form.get("page_size", 15))
+    orderby = request.form.get("orderby", "create_time")
+    desc = request.form.get("desc", True)
+    keywords = request.form.get("keywords", "")
+
+    try:
+        docs, tol = DocumentService.get_by_kb_id(
+            kb_id, page_number, items_per_page, orderby, desc, keywords)
+        docs = [{"doc_id": doc['id'], "doc_name": doc['name']} for doc in docs]
+
+        return get_json_result(data={"total": tol, "docs": docs})
+    
+    except Exception as e:
+        return server_error_response(e)
+
+
+@manager.route('/document/rm', methods=['POST'])
+# @login_required
+def document_rm():
+    token = request.headers.get('Authorization').split()[1]
+    objs = APIToken.query(token=token)
+    if not objs:
+        return get_json_result(
+            data=False, retmsg='Token is not valid!"', retcode=RetCode.AUTHENTICATION_ERROR)
+
+    tenant_id = objs[0].tenant_id
+    req = request.json
+    doc_ids = []
+    try:
+        doc_ids = [DocumentService.get_doc_id_by_doc_name(doc_name) for doc_name in req.get("doc_names", [])]
+        for doc_id in req.get("doc_ids", []):
+            if doc_id not in doc_ids:
+                doc_ids.append(doc_id)
+
+        if not doc_ids:
+            return get_json_result(
+                data=False, retmsg="Can't find doc_names or doc_ids"
+            )
+
+    except Exception as e:
+        return server_error_response(e)
+
+    root_folder = FileService.get_root_folder(tenant_id)
+    pf_id = root_folder["id"]
+    FileService.init_knowledgebase_docs(pf_id, tenant_id)
+
+    errors = ""
+    for doc_id in doc_ids:
+        try:
+            e, doc = DocumentService.get_by_id(doc_id)
+            if not e:
+                return get_data_error_result(retmsg="Document not found!")
+            tenant_id = DocumentService.get_tenant_id(doc_id)
+            if not tenant_id:
+                return get_data_error_result(retmsg="Tenant not found!")
+
+            b, n = File2DocumentService.get_minio_address(doc_id=doc_id)
+
+            if not DocumentService.remove_document(doc, tenant_id):
+                return get_data_error_result(
+                    retmsg="Database error (Document removal)!")
+
+            f2d = File2DocumentService.get_by_document_id(doc_id)
+            FileService.filter_delete([File.source_type == FileSource.KNOWLEDGEBASE, File.id == f2d[0].file_id])
+            File2DocumentService.delete_by_document_id(doc_id)
+
+            MINIO.rm(b, n)
+        except Exception as e:
+            errors += str(e)
+
+    if errors:
+        return get_json_result(data=False, retmsg=errors, retcode=RetCode.SERVER_ERROR)
+
+    return get_json_result(data=True)

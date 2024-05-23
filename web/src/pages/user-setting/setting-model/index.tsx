@@ -6,7 +6,11 @@ import {
   useFetchLlmFactoryListOnMount,
   useFetchMyLlmListOnMount,
 } from '@/hooks/llmHooks';
-import { SettingOutlined, UserOutlined } from '@ant-design/icons';
+import {
+  CloseCircleOutlined,
+  SettingOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import {
   Avatar,
   Button,
@@ -21,6 +25,7 @@ import {
   Space,
   Spin,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 import { useCallback } from 'react';
@@ -28,13 +33,16 @@ import SettingTitle from '../components/setting-title';
 import { isLocalLlmFactory } from '../utils';
 import ApiKeyModal from './api-key-modal';
 import {
+  useHandleDeleteLlm,
   useSelectModelProvidersLoading,
   useSubmitApiKey,
   useSubmitOllama,
+  useSubmitVolcEngine,
   useSubmitSystemModelSetting,
 } from './hooks';
 import styles from './index.less';
 import OllamaModal from './ollama-modal';
+import VolcEngineModal from "./volcengine-model";
 import SystemModelSettingModal from './system-model-setting-modal';
 
 const IconMap = {
@@ -45,6 +53,8 @@ const IconMap = {
   文心一言: 'wenxin',
   Ollama: 'ollama',
   Xinference: 'xinference',
+  DeepSeek: 'deepseek',
+  VolcEngine: 'volc_engine',
 };
 
 const LlmIcon = ({ name }: { name: string }) => {
@@ -66,6 +76,7 @@ interface IModelCardProps {
 const ModelCard = ({ item, clickApiKey }: IModelCardProps) => {
   const { visible, switchVisible } = useSetModalState();
   const { t } = useTranslate('setting');
+  const { handleDeleteLlm } = useHandleDeleteLlm(item.name);
 
   const handleApiKeyClick = () => {
     clickApiKey(item.name);
@@ -112,6 +123,11 @@ const ModelCard = ({ item, clickApiKey }: IModelCardProps) => {
               <List.Item>
                 <Space>
                   {item.name} <Tag color="#b8b8b8">{item.type}</Tag>
+                  <Tooltip title={t('delete', { keyPrefix: 'common' })}>
+                    <Button type={'text'} onClick={handleDeleteLlm(item.name)}>
+                      <CloseCircleOutlined style={{ color: '#D92D20' }} />
+                    </Button>
+                  </Tooltip>
                 </Space>
               </List.Item>
             )}
@@ -152,6 +168,15 @@ const UserSettingModel = () => {
     selectedLlmFactory,
   } = useSubmitOllama();
 
+  const {
+    volcAddingVisible,
+    hideVolcAddingModal,
+    showVolcAddingModal,
+    onVolcAddingOk,
+    volcAddingLoading,
+    selectedVolcFactory,
+  } = useSubmitVolcEngine();
+
   const handleApiKeyClick = useCallback(
     (llmFactory: string) => {
       if (isLocalLlmFactory(llmFactory)) {
@@ -166,6 +191,8 @@ const UserSettingModel = () => {
   const handleAddModel = (llmFactory: string) => () => {
     if (isLocalLlmFactory(llmFactory)) {
       showLlmAddingModal(llmFactory);
+    } else if (llmFactory === 'VolcEngine') {
+      showVolcAddingModal('VolcEngine');
     } else {
       handleApiKeyClick(llmFactory);
     }
@@ -223,12 +250,12 @@ const UserSettingModel = () => {
   ];
 
   return (
-    <>
+    <section id="xx" className={styles.modelWrapper}>
       <Spin spinning={loading}>
-        <section className={styles.modelWrapper}>
+        <section className={styles.modelContainer}>
           <SettingTitle
             title={t('model')}
-            description={t('profileDescription')}
+            description={t('modelDescription')}
             showRightButton
             clickButton={showSystemSettingModal}
           ></SettingTitle>
@@ -257,7 +284,14 @@ const UserSettingModel = () => {
         loading={llmAddingLoading}
         llmFactory={selectedLlmFactory}
       ></OllamaModal>
-    </>
+      <VolcEngineModal
+        visible={volcAddingVisible}
+        hideModal={hideVolcAddingModal}
+        onOk={onVolcAddingOk}
+        loading={volcAddingLoading}
+        llmFactory={selectedVolcFactory}
+      ></VolcEngineModal>
+    </section>
   );
 };
 

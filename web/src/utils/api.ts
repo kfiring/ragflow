@@ -18,6 +18,7 @@ export default {
   my_llm: `${api_host}/llm/my_llms`,
   set_api_key: `${api_host}/llm/set_api_key`,
   add_llm: `${api_host}/llm/add_llm`,
+  delete_llm: `${api_host}/llm/delete_llm`,
 
   // knowledge base
   kb_list: `${api_host}/kb/list`,
@@ -66,4 +67,18 @@ export default {
   createExternalConversation: `${api_host}/api/new_conversation`,
   getExternalConversation: `${api_host}/api/conversation`,
   completeExternalConversation: `${api_host}/api/completion`,
+
+  // file manager
+  listFile: `${api_host}/file/list`,
+  uploadFile: `${api_host}/file/upload`,
+  removeFile: `${api_host}/file/rm`,
+  renameFile: `${api_host}/file/rename`,
+  getAllParentFolder: `${api_host}/file/all_parent_folder`,
+  createFolder: `${api_host}/file/create`,
+  connectFileToKnowledge: `${api_host}/file2document/convert`,
+  getFile: `${api_host}/file/get`,
+
+  // system
+  getSystemVersion: `${api_host}/system/version`,
+  getSystemStatus: `${api_host}/system/status`,
 };

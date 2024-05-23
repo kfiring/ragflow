@@ -16,10 +16,13 @@
 import os
 import time
 import uuid
+from copy import deepcopy
 
 from api.db import LLMType, UserTenantRole
 from api.db.db_models import init_database_tables as init_web_db, LLMFactories, LLM, TenantLLM
 from api.db.services import UserService
+from api.db.services.document_service import DocumentService
+from api.db.services.knowledgebase_service import KnowledgebaseService
 from api.db.services.llm_service import LLMFactoriesService, LLMService, TenantLLMService, LLMBundle
 from api.db.services.user_service import TenantService, UserTenantService
 from api.settings import CHAT_MDL, EMBEDDING_MDL, ASR_MDL, IMAGE2TEXT_MDL, PARSERS, LLM_FACTORY, API_KEY, LLM_BASE_URL
@@ -120,11 +123,21 @@ factory_infos = [{
     "tags": "LLM,TEXT EMBEDDING,SPEECH2TEXT,MODERATION",
         "status": "1",
 },{
-    "name": "QAnything",
+    "name": "Youdao",
     "logo": "",
     "tags": "LLM,TEXT EMBEDDING,SPEECH2TEXT,MODERATION",
-        "status": "1",
-},
+    "status": "1",
+},{
+    "name": "DeepSeek",
+    "logo": "",
+    "tags": "LLM",
+    "status": "1",
+},{
+    "name": "VolcEngine",
+    "logo": "",
+    "tags": "LLM, TEXT EMBEDDING",
+    "status": "1",
+}
     # {
     #     "name": "文心一言",
     #     "logo": "",
@@ -139,6 +152,12 @@ def init_llm_factory():
         # ---------------------- OpenAI ------------------------
         {
             "fid": factory_infos[0]["name"],
+            "llm_name": "gpt-4o",
+            "tags": "LLM,CHAT,128K",
+            "max_tokens": 128000,
+            "model_type": LLMType.CHAT.value + "," + LLMType.IMAGE2TEXT.value
+        }, {
+            "fid": factory_infos[0]["name"],
             "llm_name": "gpt-3.5-turbo",
             "tags": "LLM,CHAT,4K",
             "max_tokens": 4096,
@@ -152,6 +171,18 @@ def init_llm_factory():
         }, {
             "fid": factory_infos[0]["name"],
             "llm_name": "text-embedding-ada-002",
+            "tags": "TEXT EMBEDDING,8K",
+            "max_tokens": 8191,
+            "model_type": LLMType.EMBEDDING.value
+        }, {
+            "fid": factory_infos[0]["name"],
+            "llm_name": "text-embedding-3-small",
+            "tags": "TEXT EMBEDDING,8K",
+            "max_tokens": 8191,
+            "model_type": LLMType.EMBEDDING.value
+        }, {
+            "fid": factory_infos[0]["name"],
+            "llm_name": "text-embedding-3-large",
             "tags": "TEXT EMBEDDING,8K",
             "max_tokens": 8191,
             "model_type": LLMType.EMBEDDING.value
@@ -323,13 +354,43 @@ def init_llm_factory():
             "max_tokens": 2147483648,
             "model_type": LLMType.EMBEDDING.value
         },
-        # ------------------------ QAnything -----------------------
+        # ------------------------ Youdao -----------------------
         {
             "fid": factory_infos[7]["name"],
             "llm_name": "maidalun1020/bce-embedding-base_v1",
             "tags": "TEXT EMBEDDING,",
             "max_tokens": 512,
             "model_type": LLMType.EMBEDDING.value
+        },
+        # ------------------------ DeepSeek -----------------------
+        {
+            "fid": factory_infos[8]["name"],
+            "llm_name": "deepseek-chat",
+            "tags": "LLM,CHAT,",
+            "max_tokens": 32768,
+            "model_type": LLMType.CHAT.value
+        },
+        {
+            "fid": factory_infos[8]["name"],
+            "llm_name": "deepseek-coder",
+            "tags": "LLM,CHAT,",
+            "max_tokens": 16385,
+            "model_type": LLMType.CHAT.value
+        },
+        # ------------------------ VolcEngine -----------------------
+        {
+            "fid": factory_infos[9]["name"],
+            "llm_name": "Skylark2-pro-32k",
+            "tags": "LLM,CHAT,32k",
+            "max_tokens": 32768,
+            "model_type": LLMType.CHAT.value
+        },
+        {
+            "fid": factory_infos[9]["name"],
+            "llm_name": "Skylark2-pro-4k",
+            "tags": "LLM,CHAT,4k",
+            "max_tokens": 4096,
+            "model_type": LLMType.CHAT.value
         },
     ]
     for info in factory_infos:
@@ -347,7 +408,28 @@ def init_llm_factory():
     LLMService.filter_delete([LLM.fid == "Local"])
     LLMService.filter_delete([LLM.fid == "Moonshot", LLM.llm_name == "flag-embedding"])
     TenantLLMService.filter_delete([TenantLLM.llm_factory == "Moonshot", TenantLLM.llm_name == "flag-embedding"])
-
+    LLMFactoriesService.filter_delete([LLMFactoriesService.model.name == "QAnything"])
+    LLMService.filter_delete([LLMService.model.fid == "QAnything"])
+    TenantLLMService.filter_update([TenantLLMService.model.llm_factory == "QAnything"], {"llm_factory": "Youdao"})
+    ## insert openai two embedding models to the current openai user.
+    print("Start to insert 2 OpenAI embedding models...")
+    tenant_ids = set([row["tenant_id"] for row in TenantLLMService.get_openai_models()])
+    for tid in tenant_ids:
+        for row in TenantLLMService.query(llm_factory="OpenAI", tenant_id=tid):
+            row = row.to_dict()
+            row["model_type"] = LLMType.EMBEDDING.value
+            row["llm_name"] = "text-embedding-3-small"
+            row["used_tokens"] = 0
+            try:
+                TenantLLMService.save(**row)
+                row = deepcopy(row)
+                row["llm_name"] = "text-embedding-3-large"
+                TenantLLMService.save(**row)
+            except Exception as e:
+                pass
+            break
+    for kb_id in KnowledgebaseService.get_all_ids():
+        KnowledgebaseService.update_by_id(kb_id, {"doc_num": DocumentService.get_kb_doc_count(kb_id)})
     """
     drop table llm;
     drop table llm_factories;

@@ -32,7 +32,7 @@ access_logger = getLogger("access")
 database_logger = getLogger("database")
 chat_logger = getLogger("chat")
 
-from rag.utils import ELASTICSEARCH
+from rag.utils.es_conn import ELASTICSEARCH
 from rag.nlp import search
 from api.utils import get_base_config, decrypt_database_config
 
@@ -84,6 +84,12 @@ default_llm = {
     "Moonshot": {
         "chat_model": "moonshot-v1-8k",
         "embedding_model": "",
+        "image2text_model": "",
+        "asr_model": "",
+    },
+    "DeepSeek": {
+        "chat_model": "deepseek-chat",
+        "embedding_model": "BAAI/bge-large-zh-v1.5",
         "image2text_model": "",
         "asr_model": "",
     }
@@ -152,6 +158,7 @@ CLIENT_AUTHENTICATION = AUTHENTICATION_CONF.get(
         "switch", False)
 HTTP_APP_KEY = AUTHENTICATION_CONF.get("client", {}).get("http_app_key")
 GITHUB_OAUTH = get_base_config("oauth", {}).get("github")
+FEISHU_OAUTH = get_base_config("oauth", {}).get("feishu")
 WECHAT_OAUTH = get_base_config("oauth", {}).get("wechat")
 
 # site

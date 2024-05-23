@@ -1,12 +1,12 @@
 import { Authorization } from '@/constants/authorization';
 import i18n from '@/locales/config';
-import authorizationUtil from '@/utils/authorizationUtil';
+import authorizationUtil, { getAuthorization } from '@/utils/authorizationUtil';
 import { message, notification } from 'antd';
 import { history } from 'umi';
 import { RequestMethod, extend } from 'umi-request';
 import { convertTheKeysOfTheObjectToSnake } from './commonUtil';
 
-const ABORT_REQUEST_ERR_MESSAGE = 'The user aborted a request.'; // 手动中断请求。errorHandler 抛出的error message
+const ABORT_REQUEST_ERR_MESSAGE = 'The user aborted a request.';
 
 const RetcodeMessage = {
   200: i18n.t('message.200'),
@@ -41,9 +41,7 @@ type ResultCode =
   | 502
   | 503
   | 504;
-/**
- * 异常处理程序
- */
+
 interface ResponseType {
   retcode: number;
   data: any;
@@ -55,7 +53,6 @@ const errorHandler = (error: {
   message: string;
 }): Response => {
   const { response } = error;
-  // 手动中断请求 abort
   if (error.message === ABORT_REQUEST_ERR_MESSAGE) {
     console.log('user abort  request');
   } else {
@@ -77,17 +74,13 @@ const errorHandler = (error: {
   return response;
 };
 
-/**
- * 配置request请求时的默认参数
- */
 const request: RequestMethod = extend({
-  errorHandler, // 默认错误处理
+  errorHandler,
   timeout: 300000,
   getResponse: true,
 });
 
 request.interceptors.request.use((url: string, options: any) => {
-  const authorization = authorizationUtil.getAuthorization();
   const data = convertTheKeysOfTheObjectToSnake(options.data);
   const params = convertTheKeysOfTheObjectToSnake(options.params);
 
@@ -95,10 +88,12 @@ request.interceptors.request.use((url: string, options: any) => {
     url,
     options: {
       ...options,
-      // data,
-      // params,
+      data,
+      params,
       headers: {
-        ...(options.skipToken ? undefined : { [Authorization]: authorization }),
+        ...(options.skipToken
+          ? undefined
+          : { [Authorization]: getAuthorization() }),
         ...options.headers,
       },
       interceptors: true,
@@ -106,16 +101,11 @@ request.interceptors.request.use((url: string, options: any) => {
   };
 });
 
-/*
- * 请求response拦截器
- * */
-
 request.interceptors.response.use(async (response: any, options) => {
   if (options.responseType === 'blob') {
     return response;
   }
   const data: ResponseType = await response.clone().json();
-  // response 拦截
 
   if (data.retcode === 401 || data.retcode === 401) {
     notification.error({

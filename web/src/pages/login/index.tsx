@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Icon, useNavigate } from 'umi';
 import RightPanel from './right-panel';
 
+import { Domain } from '@/constants/common';
 import styles from './index.less';
 
 const Login = () => {
@@ -167,20 +168,22 @@ const Login = () => {
                     Sign in with Google
                   </div>
                 </Button> */}
-                <Button
-                  block
-                  size="large"
-                  onClick={toGoogle}
-                  style={{ marginTop: 15 }}
-                >
-                  <div>
-                    <Icon
-                      icon="local:github"
-                      style={{ verticalAlign: 'middle', marginRight: 5 }}
-                    />
-                    Sign in with Github
-                  </div>
-                </Button>
+                {location.host === Domain && (
+                  <Button
+                    block
+                    size="large"
+                    onClick={toGoogle}
+                    style={{ marginTop: 15 }}
+                  >
+                    <div>
+                      <Icon
+                        icon="local:github"
+                        style={{ verticalAlign: 'middle', marginRight: 5 }}
+                      />
+                      Sign in with Github
+                    </div>
+                  </Button>
+                )}
               </>
             )}
           </Form>

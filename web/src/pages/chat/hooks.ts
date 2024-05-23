@@ -1,7 +1,6 @@
 import { MessageType } from '@/constants/chat';
 import { fileIconMap } from '@/constants/common';
 import {
-  useCompleteConversation,
   useCreateToken,
   useFetchConversation,
   useFetchConversationList,
@@ -14,15 +13,27 @@ import {
   useRemoveToken,
   useSelectConversationList,
   useSelectDialogList,
+  useSelectStats,
   useSelectTokenList,
   useSetDialog,
   useUpdateConversation,
 } from '@/hooks/chatHooks';
-import { useSetModalState, useShowDeleteConfirm } from '@/hooks/commonHooks';
+import {
+  useSetModalState,
+  useShowDeleteConfirm,
+  useTranslate,
+} from '@/hooks/commonHooks';
+import { useSendMessageWithSse } from '@/hooks/logicHooks';
 import { useOneNamespaceEffectsLoading } from '@/hooks/storeHooks';
-import { IConversation, IDialog, IStats } from '@/interfaces/database/chat';
+import {
+  IAnswer,
+  IConversation,
+  IDialog,
+  IStats,
+} from '@/interfaces/database/chat';
 import { IChunk } from '@/interfaces/database/knowledge';
 import { getFileExtension } from '@/utils';
+import { message } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import omit from 'lodash/omit';
 import {
@@ -374,31 +385,56 @@ export const useSelectCurrentConversation = () => {
   const dialog = useSelectCurrentDialog();
   const { conversationId, dialogId } = useGetChatSearchParams();
 
-  const addNewestConversation = useCallback((message: string) => {
+  const addNewestConversation = useCallback(
+    (message: string, answer: string = '') => {
+      setCurrentConversation((pre) => {
+        return {
+          ...pre,
+          message: [
+            ...pre.message,
+            {
+              role: MessageType.User,
+              content: message,
+              id: uuid(),
+            } as IMessage,
+            {
+              role: MessageType.Assistant,
+              content: answer,
+              id: uuid(),
+              reference: [],
+            } as IMessage,
+          ],
+        };
+      });
+    },
+    [],
+  );
+
+  const addNewestAnswer = useCallback((answer: IAnswer) => {
     setCurrentConversation((pre) => {
-      return {
-        ...pre,
-        message: [
-          ...pre.message,
-          {
-            role: MessageType.User,
-            content: message,
-            id: uuid(),
-          } as IMessage,
-          {
-            role: MessageType.Assistant,
-            content: '',
-            id: uuid(),
-            reference: [],
-          } as IMessage,
-        ],
-      };
+      const latestMessage = pre.message?.at(-1);
+
+      if (latestMessage) {
+        return {
+          ...pre,
+          message: [
+            ...pre.message.slice(0, -1),
+            {
+              ...latestMessage,
+              content: answer.answer,
+              reference: answer.reference,
+            } as IMessage,
+          ],
+        };
+      }
+      return pre;
     });
   }, []);
 
   const removeLatestMessage = useCallback(() => {
+    console.info('removeLatestMessage');
     setCurrentConversation((pre) => {
-      const nextMessages = pre.message.slice(0, -2);
+      const nextMessages = pre.message?.slice(0, -2) ?? [];
       return {
         ...pre,
         message: nextMessages,
@@ -435,7 +471,12 @@ export const useSelectCurrentConversation = () => {
     }
   }, [conversation, conversationId]);
 
-  return { currentConversation, addNewestConversation, removeLatestMessage };
+  return {
+    currentConversation,
+    addNewestConversation,
+    removeLatestMessage,
+    addNewestAnswer,
+  };
 };
 
 export const useScrollToBottom = (currentConversation: IClientConversation) => {
@@ -458,8 +499,12 @@ export const useScrollToBottom = (currentConversation: IClientConversation) => {
 export const useFetchConversationOnMount = () => {
   const { conversationId } = useGetChatSearchParams();
   const fetchConversation = useFetchConversation();
-  const { currentConversation, addNewestConversation, removeLatestMessage } =
-    useSelectCurrentConversation();
+  const {
+    currentConversation,
+    addNewestConversation,
+    removeLatestMessage,
+    addNewestAnswer,
+  } = useSelectCurrentConversation();
   const ref = useScrollToBottom(currentConversation);
 
   const fetchConversationOnMount = useCallback(() => {
@@ -477,6 +522,7 @@ export const useFetchConversationOnMount = () => {
     addNewestConversation,
     ref,
     removeLatestMessage,
+    addNewestAnswer,
   };
 };
 
@@ -498,24 +544,22 @@ export const useHandleMessageInputChange = () => {
 
 export const useSendMessage = (
   conversation: IClientConversation,
-  addNewestConversation: (message: string) => void,
+  addNewestConversation: (message: string, answer?: string) => void,
   removeLatestMessage: () => void,
+  addNewestAnswer: (answer: IAnswer) => void,
 ) => {
-  const loading = useOneNamespaceEffectsLoading('chatModel', [
-    'completeConversation',
-  ]);
   const { setConversation } = useSetConversation();
   const { conversationId } = useGetChatSearchParams();
   const { handleInputChange, value, setValue } = useHandleMessageInputChange();
 
   const fetchConversation = useFetchConversation();
-  const completeConversation = useCompleteConversation();
 
   const { handleClickConversation } = useClickConversationCard();
+  const { send, answer, done } = useSendMessageWithSse();
 
   const sendMessage = useCallback(
     async (message: string, id?: string) => {
-      const retcode = await completeConversation({
+      const res: Response = await send({
         conversation_id: id ?? conversationId,
         messages: [
           ...(conversation?.message ?? []).map((x: IMessage) => omit(x, 'id')),
@@ -526,27 +570,33 @@ export const useSendMessage = (
         ],
       });
 
-      if (retcode === 0) {
+      if (res.status === 200) {
         if (id) {
+          console.info('111');
           // new conversation
           handleClickConversation(id);
         } else {
-          fetchConversation(conversationId);
+          console.info('222');
+          // fetchConversation(conversationId);
         }
       } else {
+        console.info('333');
+
         // cancel loading
         setValue(message);
+        console.info('removeLatestMessage111');
         removeLatestMessage();
       }
+      console.info('false');
     },
     [
       conversation?.message,
       conversationId,
-      fetchConversation,
+      // fetchConversation,
       handleClickConversation,
       removeLatestMessage,
       setValue,
-      completeConversation,
+      send,
     ],
   );
 
@@ -565,19 +615,27 @@ export const useSendMessage = (
     [conversationId, setConversation, sendMessage],
   );
 
-  const handlePressEnter = () => {
-    if (!loading) {
+  useEffect(() => {
+    if (answer.answer) {
+      addNewestAnswer(answer);
+      console.info('true?');
+      console.info('send msg:', answer.answer);
+    }
+  }, [answer, addNewestAnswer]);
+
+  const handlePressEnter = useCallback(() => {
+    if (done) {
       setValue('');
-      addNewestConversation(value);
       handleSendMessage(value.trim());
     }
-  };
+    addNewestConversation(value);
+  }, [addNewestConversation, handleSendMessage, done, setValue, value]);
 
   return {
     handlePressEnter,
     handleInputChange,
     value,
-    loading,
+    loading: !done,
   };
 };
 
@@ -715,6 +773,8 @@ export const useGetSendButtonDisabled = () => {
 
 type RangeValue = [Dayjs | null, Dayjs | null] | null;
 
+const getDay = (date: Dayjs) => date.format('YYYY-MM-DD');
+
 export const useFetchStatsOnMount = (visible: boolean) => {
   const fetchStats = useFetchStats();
   const [pickerValue, setPickerValue] = useState<RangeValue>([
@@ -724,7 +784,10 @@ export const useFetchStatsOnMount = (visible: boolean) => {
 
   useEffect(() => {
     if (visible && Array.isArray(pickerValue) && pickerValue[0]) {
-      fetchStats({ fromDate: pickerValue[0], toDate: pickerValue[1] });
+      fetchStats({
+        fromDate: getDay(pickerValue[0]),
+        toDate: getDay(pickerValue[1] ?? dayjs()),
+      });
     }
   }, [fetchStats, pickerValue, visible]);
 
@@ -772,35 +835,35 @@ type ChartStatsType = {
 };
 
 export const useSelectChartStatsList = (): ChartStatsType => {
-  // const stats: IStats = useSelectStats();
-  const stats = {
-    pv: [
-      ['2024-06-01', 1],
-      ['2024-07-24', 3],
-      ['2024-09-01', 10],
-    ],
-    uv: [
-      ['2024-02-01', 0],
-      ['2024-03-01', 99],
-      ['2024-05-01', 3],
-    ],
-    speed: [
-      ['2024-09-01', 2],
-      ['2024-09-01', 3],
-    ],
-    tokens: [
-      ['2024-09-01', 1],
-      ['2024-09-01', 3],
-    ],
-    round: [
-      ['2024-09-01', 0],
-      ['2024-09-01', 3],
-    ],
-    thumb_up: [
-      ['2024-09-01', 3],
-      ['2024-09-01', 9],
-    ],
-  };
+  const stats: IStats = useSelectStats();
+  // const stats = {
+  //   pv: [
+  //     ['2024-06-01', 1],
+  //     ['2024-07-24', 3],
+  //     ['2024-09-01', 10],
+  //   ],
+  //   uv: [
+  //     ['2024-02-01', 0],
+  //     ['2024-03-01', 99],
+  //     ['2024-05-01', 3],
+  //   ],
+  //   speed: [
+  //     ['2024-09-01', 2],
+  //     ['2024-09-01', 3],
+  //   ],
+  //   tokens: [
+  //     ['2024-09-01', 1],
+  //     ['2024-09-01', 3],
+  //   ],
+  //   round: [
+  //     ['2024-09-01', 0],
+  //     ['2024-09-01', 3],
+  //   ],
+  //   thumb_up: [
+  //     ['2024-09-01', 3],
+  //     ['2024-09-01', 9],
+  //   ],
+  // };
 
   return Object.keys(stats).reduce((pre, cur) => {
     const item = stats[cur as keyof IStats];
@@ -812,6 +875,95 @@ export const useSelectChartStatsList = (): ChartStatsType => {
     }
     return pre;
   }, {} as ChartStatsType);
+};
+
+export const useShowTokenEmptyError = () => {
+  const [messageApi, contextHolder] = message.useMessage();
+  const { t } = useTranslate('chat');
+
+  const showTokenEmptyError = useCallback(() => {
+    messageApi.error(t('tokenError'));
+  }, [messageApi, t]);
+  return { showTokenEmptyError, contextHolder };
+};
+
+const getUrlWithToken = (token: string) => {
+  const { protocol, host } = window.location;
+  return `${protocol}//${host}/chat/share?shared_id=${token}`;
+};
+
+const useFetchTokenListBeforeOtherStep = (dialogId: string) => {
+  const { showTokenEmptyError, contextHolder } = useShowTokenEmptyError();
+
+  const listToken = useListToken();
+  const tokenList = useSelectTokenList();
+
+  const token =
+    Array.isArray(tokenList) && tokenList.length > 0 ? tokenList[0].token : '';
+
+  const handleOperate = useCallback(async () => {
+    const data = await listToken(dialogId);
+    const list = data.data;
+    if (data.retcode === 0 && Array.isArray(list) && list.length > 0) {
+      return list[0]?.token;
+    } else {
+      showTokenEmptyError();
+      return false;
+    }
+  }, [dialogId, listToken, showTokenEmptyError]);
+
+  return {
+    token,
+    contextHolder,
+    handleOperate,
+  };
+};
+
+export const useShowEmbedModal = (dialogId: string) => {
+  const {
+    visible: embedVisible,
+    hideModal: hideEmbedModal,
+    showModal: showEmbedModal,
+  } = useSetModalState();
+
+  const { handleOperate, token, contextHolder } =
+    useFetchTokenListBeforeOtherStep(dialogId);
+
+  const handleShowEmbedModal = useCallback(async () => {
+    const succeed = await handleOperate();
+    if (succeed) {
+      showEmbedModal();
+    }
+  }, [handleOperate, showEmbedModal]);
+
+  return {
+    showEmbedModal: handleShowEmbedModal,
+    hideEmbedModal,
+    embedVisible,
+    embedToken: token,
+    errorContextHolder: contextHolder,
+  };
+};
+
+export const usePreviewChat = (dialogId: string) => {
+  const { handleOperate, contextHolder } =
+    useFetchTokenListBeforeOtherStep(dialogId);
+
+  const open = useCallback((t: string) => {
+    window.open(getUrlWithToken(t), '_blank');
+  }, []);
+
+  const handlePreview = useCallback(async () => {
+    const token = await handleOperate();
+    if (token) {
+      open(token);
+    }
+  }, [handleOperate, open]);
+
+  return {
+    handlePreview,
+    contextHolder,
+  };
 };
 
 //#endregion

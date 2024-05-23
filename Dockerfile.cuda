@@ -1,4 +1,4 @@
-FROM swr.cn-north-4.myhuaweicloud.com/infiniflow/ragflow-base:v1.0
+FROM FROM infiniflow/ragflow-base:v2.0
 USER  root
 
 WORKDIR /ragflow
@@ -9,7 +9,7 @@ RUN /root/miniconda3/envs/py11/bin/pip install onnxruntime-gpu --extra-index-url
 
 
 ADD ./web ./web
-RUN cd ./web && npm i && npm run build
+RUN cd ./web && npm i --force && npm run build
 
 ADD ./api ./api
 ADD ./conf ./conf
