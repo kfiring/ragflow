@@ -5,16 +5,16 @@ mysql:
   name: 'rag_flow'
   user: 'root'
   password: 'infini_rag_flow'
-  host: 'mysql'
-  port: 3306
+  host: '127.0.0.1'
+  port: 5455
   max_connections: 100
   stale_timeout: 30
 minio:
   user: 'rag_flow'
   password: 'infini_rag_flow'
-  host: 'minio:9000'
+  host: '127.0.0.1:19000'
 es:
-  hosts: 'http://es01:9200'
+  hosts: 'http://127.0.0.1:1200'
 user_default_llm:
   factory: 'Tongyi-Qianwen'
   api_key: 'sk-xxxxxxxxxxxxx'

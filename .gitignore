@@ -22,3 +22,5 @@ Cargo.lock
 .idea/
 .vscode/
 ragflow-logs/
+logs
+rag/res
