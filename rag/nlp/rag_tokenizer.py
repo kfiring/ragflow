@@ -1,4 +1,18 @@
-# -*- coding: utf-8 -*-
+#
+#  Copyright 2024 The InfiniFlow Authors. All Rights Reserved.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
 
 import copy
 import datrie
@@ -24,7 +38,7 @@ class RagTokenizer:
     def loadDict_(self, fnm):
         print("[HUQIE]:Build trie", fnm, file=sys.stderr)
         try:
-            of = open(fnm, "r")
+            of = open(fnm, "r", encoding='utf-8')
             while True:
                 line = of.readline()
                 if not line:
@@ -241,11 +255,14 @@ class RagTokenizer:
 
         return self.score_(res[::-1])
 
+    def english_normalize_(self, tks):
+        return [self.stemmer.stem(self.lemmatizer.lemmatize(t)) if re.match(r"[a-zA-Z_-]+$", t) else t for t in tks]
+
     def tokenize(self, line):
         line = self._strQ2B(line).lower()
         line = self._tradi2simp(line)
         zh_num = len([1 for c in line if is_chinese(c)])
-        if zh_num < len(line) * 0.2:
+        if zh_num == 0:
             return " ".join([self.stemmer.stem(self.lemmatizer.lemmatize(t)) for t in word_tokenize(line)])
 
         arr = re.split(self.SPLIT_CHAR, line)
@@ -293,7 +310,7 @@ class RagTokenizer:
 
                 i = e + 1
 
-        res = " ".join(res)
+        res = " ".join(self.english_normalize_(res))
         if self.DEBUG:
             print("[TKS]", self.merge_(res))
         return self.merge_(res)
@@ -336,7 +353,7 @@ class RagTokenizer:
 
             res.append(stk)
 
-        return " ".join(res)
+        return " ".join(self.english_normalize_(res))
 
 
 def is_chinese(s):

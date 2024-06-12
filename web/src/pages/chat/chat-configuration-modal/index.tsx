@@ -8,22 +8,21 @@ import { IDialog } from '@/interfaces/database/chat';
 import { Divider, Flex, Form, Modal, Segmented, UploadFile } from 'antd';
 import { SegmentedValue } from 'antd/es/segmented';
 import camelCase from 'lodash/camelCase';
-import omit from 'lodash/omit';
 import { useEffect, useRef, useState } from 'react';
-import { variableEnabledFieldMap } from '../constants';
 import { IPromptConfigParameters } from '../interface';
-import { excludeUnEnabledVariables } from '../utils';
 import AssistantSetting from './assistant-setting';
-import { useFetchModelId } from './hooks';
+import { useFetchLlmModelOnVisible, useFetchModelId } from './hooks';
 import ModelSetting from './model-setting';
 import PromptEngine from './prompt-engine';
 
 import { useTranslate } from '@/hooks/commonHooks';
+import { getBase64FromUploadFileList } from '@/utils/fileUtil';
+import { removeUselessFieldsFromValues } from '@/utils/form';
 import styles from './index.less';
 
 const layout = {
-  labelCol: { span: 7 },
-  wrapperCol: { span: 17 },
+  labelCol: { span: 9 },
+  wrapperCol: { span: 15 },
 };
 
 const validateMessages = {
@@ -75,23 +74,18 @@ const ChatConfigurationModal = ({
 
   const handleOk = async () => {
     const values = await form.validateFields();
-    const nextValues: any = omit(values, [
-      ...Object.keys(variableEnabledFieldMap),
-      'parameters',
-      ...excludeUnEnabledVariables(values),
-    ]);
+    const nextValues: any = removeUselessFieldsFromValues(
+      values,
+      'llm_setting.',
+    );
     const emptyResponse = nextValues.prompt_config?.empty_response ?? '';
 
-    const fileList = values.icon;
-    let icon;
-
-    if (Array.isArray(fileList) && fileList.length > 0) {
-      icon = fileList[0].thumbUrl;
-    }
+    const icon = await getBase64FromUploadFileList(values.icon);
 
     const finalValues = {
       dialog_id: initialDialog.id,
       ...nextValues,
+      vector_similarity_weight: 1 - nextValues.vector_similarity_weight,
       prompt_config: {
         ...nextValues.prompt_config,
         parameters: promptEngineRef.current,
@@ -114,6 +108,8 @@ const ChatConfigurationModal = ({
     clearDialog();
     form.resetFields();
   };
+
+  useFetchLlmModelOnVisible(visible);
 
   const title = (
     <Flex gap={16}>
@@ -142,6 +138,8 @@ const ChatConfigurationModal = ({
           settledModelVariableMap[ModelVariableType.Precise],
         icon: fileList,
         llm_id: initialDialog.llm_id ?? modelId,
+        vector_similarity_weight:
+          1 - (initialDialog.vector_similarity_weight ?? 0.3),
       });
     }
   }, [initialDialog, form, visible, modelId]);

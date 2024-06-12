@@ -1,6 +1,7 @@
 import { Authorization } from '@/constants/authorization';
 import { LanguageTranslationMap } from '@/constants/common';
 import { Pagination } from '@/interfaces/common';
+import { ResponseType } from '@/interfaces/database/base';
 import { IAnswer } from '@/interfaces/database/chat';
 import { IKnowledgeFile } from '@/interfaces/database/knowledge';
 import { IChangeParserConfigRequestBody } from '@/interfaces/request/document';
@@ -9,7 +10,14 @@ import { getAuthorization } from '@/utils/authorizationUtil';
 import { PaginationProps } from 'antd';
 import axios from 'axios';
 import { EventSourceParserStream } from 'eventsource-parser/stream';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ChangeEventHandler,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDispatch } from 'umi';
 import { useSetModalState, useTranslate } from './commonHooks';
@@ -146,7 +154,9 @@ export const useSendMessageWithSse = (
   const [done, setDone] = useState(true);
 
   const send = useCallback(
-    async (body: any) => {
+    async (
+      body: any,
+    ): Promise<{ response: Response; data: ResponseType } | undefined> => {
       try {
         setDone(false);
         const response = await fetch(url, {
@@ -157,6 +167,8 @@ export const useSendMessageWithSse = (
           },
           body: JSON.stringify(body),
         });
+
+        const res = response.clone().json();
 
         const reader = response?.body
           ?.pipeThrough(new TextDecoderStream())
@@ -185,7 +197,7 @@ export const useSendMessageWithSse = (
         }
         console.info('done?');
         setDone(true);
-        return response;
+        return { data: await res, response };
       } catch (e) {
         setDone(true);
         console.warn(e);
@@ -196,3 +208,39 @@ export const useSendMessageWithSse = (
 
   return { send, answer, done };
 };
+
+//#region chat hooks
+
+export const useScrollToBottom = (messages?: unknown) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    if (messages) {
+      ref.current?.scrollIntoView({ behavior: 'instant' });
+    }
+  }, [messages]); // If the message changes, scroll to the bottom
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [scrollToBottom]);
+
+  return ref;
+};
+
+export const useHandleMessageInputChange = () => {
+  const [value, setValue] = useState('');
+
+  const handleInputChange: ChangeEventHandler<HTMLInputElement> = (e) => {
+    const value = e.target.value;
+    const nextValue = value.replaceAll('\\n', '\n').replaceAll('\\t', '\t');
+    setValue(nextValue);
+  };
+
+  return {
+    handleInputChange,
+    value,
+    setValue,
+  };
+};
+
+// #endregion

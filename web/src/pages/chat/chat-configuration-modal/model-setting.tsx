@@ -1,18 +1,14 @@
 import {
-  LlmModelType,
   ModelVariableType,
   settledModelVariableMap,
 } from '@/constants/knowledge';
-import { Divider, Flex, Form, InputNumber, Select, Slider, Switch } from 'antd';
 import classNames from 'classnames';
-import camelCase from 'lodash/camelCase';
 import { useEffect } from 'react';
 import { ISegmentedContentProps } from '../interface';
 
-import { useTranslate } from '@/hooks/commonHooks';
-import { useFetchLlmList, useSelectLlmOptions } from '@/hooks/llmHooks';
+import LlmSettingItems from '@/components/llm-setting-items';
+import { variableEnabledFieldMap } from '@/constants/chat';
 import { Variable } from '@/interfaces/database/chat';
-import { variableEnabledFieldMap } from '../constants';
 import styles from './index.less';
 
 const ModelSetting = ({
@@ -24,14 +20,6 @@ const ModelSetting = ({
   initialLlmSetting?: Variable;
   visible?: boolean;
 }) => {
-  const { t } = useTranslate('chat');
-  const parameterOptions = Object.values(ModelVariableType).map((x) => ({
-    label: t(camelCase(x)),
-    value: x,
-  }));
-
-  const modelOptions = useSelectLlmOptions();
-
   const handleParametersChange = (value: ModelVariableType) => {
     const variable = settledModelVariableMap[value];
     form.setFieldsValue({ llm_setting: variable });
@@ -56,21 +44,25 @@ const ModelSetting = ({
     }
   }, [form, initialLlmSetting, visible]);
 
-  useFetchLlmList(LlmModelType.Chat);
-
   return (
     <section
       className={classNames({
         [styles.segmentedHidden]: !show,
       })}
     >
-      <Form.Item
+      {visible && (
+        <LlmSettingItems
+          prefix="llm_setting"
+          handleParametersChange={handleParametersChange}
+        ></LlmSettingItems>
+      )}
+      {/* <Form.Item
         label={t('model')}
         name="llm_id"
         tooltip={t('modelTip')}
         rules={[{ required: true, message: t('modelMessage') }]}
       >
-        <Select options={modelOptions} showSearch />
+        <Select options={modelOptions[LlmModelType.Chat]} showSearch />
       </Form.Item>
       <Divider></Divider>
       <Form.Item
@@ -281,7 +273,7 @@ const ModelSetting = ({
             }}
           </Form.Item>
         </Flex>
-      </Form.Item>
+      </Form.Item> */}
     </section>
   );
 };

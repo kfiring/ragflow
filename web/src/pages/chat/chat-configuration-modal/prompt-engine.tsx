@@ -7,7 +7,6 @@ import {
   Form,
   Input,
   Row,
-  Slider,
   Switch,
   Table,
   TableProps,
@@ -29,15 +28,11 @@ import {
 } from '../interface';
 import { EditableCell, EditableRow } from './editable-cell';
 
+import Rerank from '@/components/rerank';
+import TopNItem from '@/components/top-n-item';
 import { useTranslate } from '@/hooks/commonHooks';
 import { useSelectPromptConfigParameters } from '../hooks';
 import styles from './index.less';
-
-type FieldType = {
-  similarity_threshold?: number;
-  vector_similarity_weight?: number;
-  top_n?: number;
-};
 
 const PromptEngine = (
   { show }: ISegmentedContentProps,
@@ -164,18 +159,11 @@ const PromptEngine = (
       </Form.Item>
       <Divider></Divider>
       <SimilaritySlider isTooltipShown></SimilaritySlider>
-      <Form.Item<FieldType>
-        label={t('topN')}
-        name={'top_n'}
-        initialValue={8}
-        tooltip={t('topNTip')}
-      >
-        <Slider max={30} />
-      </Form.Item>
-
+      <TopNItem></TopNItem>
+      <Rerank></Rerank>
       <section className={classNames(styles.variableContainer)}>
         <Row align={'middle'} justify="end">
-          <Col span={7} className={styles.variableAlign}>
+          <Col span={9} className={styles.variableAlign}>
             <label className={styles.variableLabel}>
               {t('variable')}
               <Tooltip title={t('variableTip')}>
@@ -183,7 +171,7 @@ const PromptEngine = (
               </Tooltip>
             </label>
           </Col>
-          <Col span={17} className={styles.variableAlign}>
+          <Col span={15} className={styles.variableAlign}>
             <Button size="small" onClick={handleAdd}>
               {t('add')}
             </Button>

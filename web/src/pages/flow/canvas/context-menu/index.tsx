@@ -84,12 +84,9 @@ export const useHandleNodeContextMenu = (sideWidth: number) => {
       //     event.clientY >= pane.height - 200 ? pane.height - event.clientY : 0,
       // });
 
-      console.info('clientX:', event.clientX);
-      console.info('clientY:', event.clientY);
-
       setMenu({
         id: node.id,
-        top: event.clientY - 72,
+        top: event.clientY - 144,
         left: event.clientX - sideWidth,
         // top: event.clientY < pane.height - 200 ? event.clientY - 72 : 0,
         // left: event.clientX < pane.width - 200 ? event.clientX : 0,

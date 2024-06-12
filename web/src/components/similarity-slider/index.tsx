@@ -3,14 +3,18 @@ import { Form, Slider } from 'antd';
 
 type FieldType = {
   similarity_threshold?: number;
-  vector_similarity_weight?: number;
+  // vector_similarity_weight?: number;
 };
 
 interface IProps {
   isTooltipShown?: boolean;
+  vectorSimilarityWeightName?: string;
 }
 
-const SimilaritySlider = ({ isTooltipShown = false }: IProps) => {
+const SimilaritySlider = ({
+  isTooltipShown = false,
+  vectorSimilarityWeightName = 'vector_similarity_weight',
+}: IProps) => {
   const { t } = useTranslate('knowledgeDetails');
 
   return (
@@ -23,10 +27,10 @@ const SimilaritySlider = ({ isTooltipShown = false }: IProps) => {
       >
         <Slider max={1} step={0.01} />
       </Form.Item>
-      <Form.Item<FieldType>
+      <Form.Item
         label={t('vectorSimilarityWeight')}
-        name={'vector_similarity_weight'}
-        initialValue={0.3}
+        name={vectorSimilarityWeightName}
+        initialValue={1 - 0.3}
         tooltip={isTooltipShown && t('vectorSimilarityWeightTip')}
       >
         <Slider max={1} step={0.01} />

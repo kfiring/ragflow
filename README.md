@@ -17,30 +17,60 @@
     <a href="https://demo.ragflow.io" target="_blank">
         <img alt="Static Badge" src="https://img.shields.io/badge/Online-Demo-4e6b99"></a>
     <a href="https://hub.docker.com/r/infiniflow/ragflow" target="_blank">
-        <img src="https://img.shields.io/badge/docker_pull-ragflow:v0.6.0-brightgreen"
-            alt="docker pull infiniflow/ragflow:v0.6.0"></a>
-      <a href="https://github.com/infiniflow/ragflow/blob/main/LICENSE">
-    <img height="21" src="https://img.shields.io/badge/License-Apache--2.0-ffffff?style=flat-square&labelColor=d4eaf7&color=1570EF" alt="license">
+        <img src="https://img.shields.io/badge/docker_pull-ragflow:v0.7.0-brightgreen" alt="docker pull infiniflow/ragflow:v0.7.0"></a>
+    <a href="https://github.com/infiniflow/ragflow/blob/main/LICENSE">
+    <img height="21" src="https://img.shields.io/badge/License-Apache--2.0-ffffff?labelColor=d4eaf7&color=2e6cc4" alt="license">
   </a>
 </p>
+
+<h4 align="center">
+  <a href="https://ragflow.io/docs/dev/">Document</a> |
+  <a href="https://github.com/infiniflow/ragflow/issues/162">Roadmap</a> |
+  <a href="https://twitter.com/infiniflowai">Twitter</a> |
+  <a href="https://discord.gg/4XxujFgUN7">Discord</a> |
+  <a href="https://demo.ragflow.io">Demo</a>
+</h4>
+
+<details open>
+<summary></b>📕 Table of Contents</b></summary>
+  
+- 💡 [What is RAGFlow?](#-what-is-ragflow)
+- 🎮 [Demo](#-demo)
+- 📌 [Latest Updates](#-latest-updates)
+- 🌟 [Key Features](#-key-features)
+- 🔎 [System Architecture](#-system-architecture)
+- 🎬 [Get Started](#-get-started)
+- 🔧 [Configurations](#-configurations)
+- 🛠️ [Build from source](#-build-from-source)
+- 🛠️ [Launch service from source](#-launch-service-from-source)
+- 📚 [Documentation](#-documentation)
+- 📜 [Roadmap](#-roadmap)
+- 🏄 [Community](#-community)
+- 🙌 [Contributing](#-contributing)
+
+</details>
 
 ## 💡 What is RAGFlow?
 
 [RAGFlow](https://ragflow.io/) is an open-source RAG (Retrieval-Augmented Generation) engine based on deep document understanding. It offers a streamlined RAG workflow for businesses of any scale, combining LLM (Large Language Models) to provide truthful question-answering capabilities, backed by well-founded citations from various complex formatted data.
 
+## 🎮 Demo
+
+Try our demo at [https://demo.ragflow.io](https://demo.ragflow.io).
+<div align="center" style="margin-top:20px;margin-bottom:20px;">
+<img src="https://github.com/infiniflow/ragflow/assets/7248/2f6baa3e-1092-4f11-866d-36f6a9d075e5" width="1200"/>
+</div>
+
+
 ## 📌 Latest Updates
 
+- 2024-06-06 Supports [Self-RAG](https://huggingface.co/papers/2310.11511), which is enabled by default in dialog settings.
+- 2024-05-30 Integrates [BCE](https://github.com/netease-youdao/BCEmbedding) and [BGE](https://github.com/FlagOpen/FlagEmbedding) reranker models.
+- 2024-05-28 Supports LLM Baichuan and VolcanoArk.
 - 2024-05-23 Supports [RAPTOR](https://arxiv.org/html/2401.18059v1) for better text retrieval.
 - 2024-05-21 Supports streaming output and text chunk retrieval API. 
 - 2024-05-15 Integrates OpenAI GPT-4o.
 - 2024-05-08 Integrates LLM DeepSeek-V2.
-- 2024-04-26 Adds file management.
-- 2024-04-19 Supports conversation API ([detail](./docs/references/api.md)).
-- 2024-04-16 Integrates an embedding model 'bce-embedding-base_v1' from [BCEmbedding](https://github.com/netease-youdao/BCEmbedding), and [FastEmbed](https://github.com/qdrant/fastembed), which is designed specifically for light and speedy embedding.
-- 2024-04-11 Supports [Xinference](./docs/guides/deploy_local_llm.md) for local LLM deployment.
-- 2024-04-10 Adds a new layout recognition model for analyzing legal documents.
-- 2024-04-08 Supports [Ollama](./docs/guides/deploy_local_llm.md) for local LLM deployment.
-- 2024-04-07 Supports Chinese UI.
 
 ## 🌟 Key Features
 
@@ -88,7 +118,7 @@
 
 ### 🚀 Start up the server
 
-1. Ensure `vm.max_map_count` >= 262144 ([more](./docs/guides/max_map_count.md)):
+1. Ensure `vm.max_map_count` >= 262144:
 
    > To check the value of `vm.max_map_count`:
    >
@@ -117,7 +147,7 @@
 
 3. Build the pre-built Docker images and start up the server:
 
-   > Running the following commands automatically downloads the *dev* version RAGFlow Docker image. To download and run a specified Docker version, update `RAGFLOW_VERSION` in **docker/.env** to the intended version, for example `RAGFLOW_VERSION=v0.6.0`, before running the following commands.
+   > Running the following commands automatically downloads the *dev* version RAGFlow Docker image. To download and run a specified Docker version, update `RAGFLOW_VERSION` in **docker/.env** to the intended version, for example `RAGFLOW_VERSION=v0.7.0`, before running the following commands.
 
    ```bash
    $ cd ragflow/docker
@@ -152,10 +182,10 @@
    > If you skip this confirmation step and directly log in to RAGFlow, your browser may prompt a `network anomaly` error because, at that moment, your RAGFlow may not be fully initialized.  
 
 5. In your web browser, enter the IP address of your server and log in to RAGFlow.
-   > With default settings, you only need to enter `http://IP_OF_YOUR_MACHINE` (**sans** port number) as the default HTTP serving port `80` can be omitted when using the default configurations.
+   > With the default settings, you only need to enter `http://IP_OF_YOUR_MACHINE` (**sans** port number) as the default HTTP serving port `80` can be omitted when using the default configurations.
 6. In [service_conf.yaml](./docker/service_conf.yaml), select the desired LLM factory in `user_default_llm` and update the `API_KEY` field with the corresponding API key.
 
-   > See [./docs/guides/llm_api_key_setup.md](./docs/guides/llm_api_key_setup.md) for more information.
+   > See [llm_api_key_setup](https://ragflow.io/docs/dev/llm_api_key_setup) for more information.
 
    _The show is now on!_
 
@@ -267,7 +297,7 @@ To launch the service from source:
    $ cd web
    $ npm install --registry=https://registry.npmmirror.com --force
    $ vim .umirc.ts
-   # Update proxy.target to 127.0.0.1:9380
+   # Update proxy.target to http://127.0.0.1:9380
    $ npm run dev 
    ```
 
@@ -288,8 +318,10 @@ To launch the service from source:
 
 ## 📚 Documentation
 
-- [Quickstart](./docs/quickstart.md)
-- [FAQ](./docs/references/faq.md)
+- [Quickstart](https://ragflow.io/docs/dev/)
+- [User guide](https://ragflow.io/docs/dev/category/user-guides)
+- [References](https://ragflow.io/docs/dev/category/references)
+- [FAQ](https://ragflow.io/docs/dev/faq)
 
 ## 📜 Roadmap
 
@@ -299,6 +331,7 @@ See the [RAGFlow Roadmap 2024](https://github.com/infiniflow/ragflow/issues/162)
 
 - [Discord](https://discord.gg/4XxujFgUN7)
 - [Twitter](https://twitter.com/infiniflowai)
+- [GitHub Discussions](https://github.com/orgs/infiniflow/discussions)
 
 ## 🙌 Contributing
 
