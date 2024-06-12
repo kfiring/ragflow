@@ -1,0 +1,34 @@
+include:
+  - path: ./docker-compose-base.yml
+    env_file: ./.env
+
+services:
+  ragflow:
+    depends_on:
+      mysql:
+        condition: service_healthy
+      es01:
+        condition: service_healthy
+    image: gongjiang/ragflow.dev
+    build:
+      context: ../
+      dockerfile: dev.Dockerfile
+    container_name: ragflow.dev
+    command: ["bash", "-c", "sleep 1000000000"]
+    ports:
+      - ${SVR_HTTP_PORT}:9380
+      - 80:80
+      - 443:443
+    volumes:
+      - ../:/code/ragflow
+      - ./service_conf.yaml:/code/ragflow/conf/service_conf.yaml
+      - ./nginx/ragflow.conf:/etc/nginx/conf.d/ragflow.conf
+      - ./nginx/proxy.conf:/etc/nginx/proxy.conf
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    environment:
+      - TZ=${TIMEZONE}
+      - PYTHONPATH=/code/ragflow
+    networks:
+      - ragflow
+    working_dir: /code/ragflow
+    restart: always
