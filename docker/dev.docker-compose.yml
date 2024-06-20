@@ -30,5 +30,7 @@ services:
       - PYTHONPATH=/code/ragflow
     networks:
       - ragflow
+    extra_hosts:
+      - "raw.githubusercontent.com:185.199.108.133"
     working_dir: /code/ragflow
     restart: always
