@@ -244,9 +244,12 @@ def chunk(filename, binary=None, from_page=0, to_page=100000,
 
 
 if __name__ == "__main__":
-    import sys
+    import sys, json
 
     def dummy(prog=None, msg=""):
         pass
 
-    chunk(sys.argv[1], from_page=0, to_page=10, callback=dummy)
+    res = chunk(sys.argv[1], from_page=0, to_page=3, callback=dummy)
+    for i, ck in enumerate(res):
+        print("-"*30 + 'chunk-{}'.format(i) + "-"*30)
+        print(json.dumps(ck, default=lambda obj: str(obj) if not isinstance(obj, str) else obj, indent=2, ensure_ascii=False))
