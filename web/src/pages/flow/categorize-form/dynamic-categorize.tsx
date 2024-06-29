@@ -1,58 +1,91 @@
+import { useTranslate } from '@/hooks/commonHooks';
 import { CloseOutlined } from '@ant-design/icons';
 import { Button, Card, Form, Input, Select, Typography } from 'antd';
-import { useBuildCategorizeToOptions } from './hooks';
+import { useUpdateNodeInternals } from 'reactflow';
+import { ICategorizeItem } from '../interface';
+import { useBuildCategorizeToOptions, useHandleToSelectChange } from './hooks';
 
-const DynamicCategorize = () => {
+interface IProps {
+  nodeId?: string;
+}
+
+const DynamicCategorize = ({ nodeId }: IProps) => {
+  const updateNodeInternals = useUpdateNodeInternals();
   const form = Form.useFormInstance();
-  const options = useBuildCategorizeToOptions();
+  const buildCategorizeToOptions = useBuildCategorizeToOptions();
+  const { handleSelectChange } = useHandleToSelectChange(nodeId);
+  const { t } = useTranslate('flow');
 
   return (
     <>
       <Form.List name="items">
-        {(fields, { add, remove }) => (
-          <div style={{ display: 'flex', rowGap: 16, flexDirection: 'column' }}>
-            {fields.map((field) => (
-              <Card
-                size="small"
-                key={field.key}
-                extra={
-                  <CloseOutlined
-                    onClick={() => {
-                      remove(field.name);
-                    }}
-                  />
-                }
-              >
-                <Form.Item
-                  label="name"
-                  name={[field.name, 'name']}
-                  initialValue={`Categorize ${field.name + 1}`}
-                  rules={[
-                    { required: true, message: 'Please input your name!' },
-                  ]}
+        {(fields, { add, remove }) => {
+          const handleAdd = () => {
+            const idx = fields.length;
+            add({ name: `Categorize ${idx + 1}` });
+            if (nodeId) updateNodeInternals(nodeId);
+          };
+          return (
+            <div
+              style={{ display: 'flex', rowGap: 10, flexDirection: 'column' }}
+            >
+              {fields.map((field) => (
+                <Card
+                  size="small"
+                  key={field.key}
+                  extra={
+                    <CloseOutlined
+                      onClick={() => {
+                        remove(field.name);
+                      }}
+                    />
+                  }
                 >
-                  <Input />
-                </Form.Item>
-                <Form.Item
-                  label="description"
-                  name={[field.name, 'description']}
-                >
-                  <Input.TextArea rows={3} />
-                </Form.Item>
-                <Form.Item label="examples" name={[field.name, 'examples']}>
-                  <Input.TextArea rows={3} />
-                </Form.Item>
-                <Form.Item label="to" name={[field.name, 'to']}>
-                  <Select options={options} />
-                </Form.Item>
-              </Card>
-            ))}
+                  <Form.Item
+                    label={t('name')}
+                    name={[field.name, 'name']}
+                    rules={[{ required: true, message: t('nameMessage') }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                  <Form.Item
+                    label={t('description')}
+                    name={[field.name, 'description']}
+                  >
+                    <Input.TextArea rows={3} />
+                  </Form.Item>
+                  <Form.Item
+                    label={t('examples')}
+                    name={[field.name, 'examples']}
+                  >
+                    <Input.TextArea rows={3} />
+                  </Form.Item>
+                  <Form.Item label={t('to')} name={[field.name, 'to']}>
+                    <Select
+                      allowClear
+                      options={buildCategorizeToOptions(
+                        (form.getFieldValue(['items']) ?? [])
+                          .map((x: ICategorizeItem) => x.to)
+                          .filter(
+                            (x: string) =>
+                              x !==
+                              form.getFieldValue(['items', field.name, 'to']),
+                          ),
+                      )}
+                      onChange={handleSelectChange(
+                        form.getFieldValue(['items', field.name, 'name']),
+                      )}
+                    />
+                  </Form.Item>
+                </Card>
+              ))}
 
-            <Button type="dashed" onClick={() => add()} block>
-              + Add Item
-            </Button>
-          </div>
-        )}
+              <Button type="dashed" onClick={handleAdd} block>
+                + Add Item
+              </Button>
+            </div>
+          );
+        }}
       </Form.List>
 
       <Form.Item noStyle shouldUpdate>

@@ -162,3 +162,7 @@ export const buildDslComponentsByGraph = (
 
   return components;
 };
+
+export const getOperatorTypeFromId = (id: string | null) => {
+  return id?.split(':')[0] as Operator | undefined;
+};

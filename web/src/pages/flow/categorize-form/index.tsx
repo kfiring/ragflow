@@ -10,7 +10,7 @@ const CategorizeForm = ({ form, onValuesChange, node }: IOperatorForm) => {
   const { t } = useTranslate('flow');
   const { handleValuesChange } = useHandleFormValuesChange({
     form,
-    node,
+    nodeId: node?.id,
     onValuesChange,
   });
   useSetLlmSetting(form);
@@ -32,7 +32,7 @@ const CategorizeForm = ({ form, onValuesChange, node }: IOperatorForm) => {
       >
         <LLMSelect></LLMSelect>
       </Form.Item>
-      <DynamicCategorize></DynamicCategorize>
+      <DynamicCategorize nodeId={node?.id}></DynamicCategorize>
     </Form>
   );
 };
