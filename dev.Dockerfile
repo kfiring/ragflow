@@ -10,7 +10,7 @@ COPY ./ubuntu.sources.list /etc/apt/sources.list
 
 RUN apt update \
     && apt install -y \
-       wget curl vim iputils-ping net-tools telnet build-essential libopenmpi-dev openmpi-bin openmpi-common \
+       gdb wget curl vim iputils-ping net-tools telnet build-essential libopenmpi-dev openmpi-bin openmpi-common \
        libglib2.0-0 libgl1-mesa-glx nginx zip unzip \
     && wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh \
     && bash ~/miniconda.sh -b -p /root/miniconda3 \
